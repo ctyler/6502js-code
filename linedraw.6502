@@ -55,9 +55,27 @@ define	B_LEFT		$34
 	brk
 
 
-; --------------------------- Update cursor position based on 
+; ----- Update cursor position based on coordinates
+
+C_GOTO:	lda A_ROW	; ensure ROW is in range 0:31
+	and #$1f
+	sta A_ROW
+
+	lda A_COL	; ensure COL is in range 0:31
+	and #$1f
+	sta A_COL
+
+	ldy A_ROW	; load POINTER with start-of-row
+	lda table_low,y
+	clc
+	adc A_COL
+	sta A_PTR
+	lda table_high,y
+	adc #$00
+	sta A_PTR_H
 
 
+; ----- Data tables
 ; these two tables contain the high and low bytes
 ; of the addresses of the start of each row
  
