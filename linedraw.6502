@@ -1,0 +1,75 @@
+; Option 5
+
+; zero-page variable locations
+define	A_ROW		$00	; cursor A ROW position
+define	A_COL		$01	; cursor B COL position
+define	A_PTR		$02	; pointer to cursor A in screen memory
+define	A_PTR_H		$03	; ... high byte of above
+
+define 	B_ROW		$10	; Same for cursor B...
+define	B_COL		$11
+define	B_PTR		$12
+define	B_PTR_H		$13
+
+define	MODE		$20	; Mode: bit 0 (0=row, 1=col); bit 1 (0=inc, 1=dec)
+define	DELTA		$21	; 16-bit fixed-point delta value, radix=8
+define	DELTA_H		$22
+define	COL		$23	; 16-bit fixed-point COL position for line draw
+define	COL_H		$24	; ... this is the integer portion
+define	ROW		$25	; 16-bit fixed-point ROW position for line draw
+define	ROW_H		$26	; ... this is the integer portion
+define	PTR		$27	; pointer to (ROW_H,COL_H) address on screen
+define	PTR_H		$28	
+
+; constants
+define	A_ROW_S		$08	; starting position for A_ROW
+define	A_COL_S		$08	; starting position for A_COL
+define	B_ROW_S		$18	; starting position for B_ROW
+define	B_COL_S		$08	; starting position for B_COL
+define	A_COLOUR	$0d	; colour of cursor A
+define	B_COLOUR	$0e	; colour of cursor B
+define	L_COLOUR	$01	; line colour
+
+define	A_UP		$80	; cursor B key controls (arrows)
+define	A_RIGHT		$81
+define	A_DOWN		$82
+define	A_LEFT		$83
+
+define	B_UP		$38	; cursor B key controls (number pad)
+define	B_RIGHT		$36
+define	B_DOWN		$32
+define	B_LEFT		$34
+
+; initialize
+	lda	#A_ROW_S
+	sta	A_ROW
+	lda 	#A_COL_S
+	sta	A_COL
+	lda 	#B_ROW_S
+	sta 	B_ROW
+	lda	#B_COL_S
+	sta	B_COL
+
+; draw cursor positions
+	jsr	C_GOTO		; update the cursor pointers based on coordinates positions
+	brk
+
+
+; --------------------------- Update cursor position based on 
+
+
+; these two tables contain the high and low bytes
+; of the addresses of the start of each row
+ 
+table_high:
+dcb $02,$02,$02,$02,$02,$02,$02,$02
+dcb $03,$03,$03,$03,$03,$03,$03,$03
+dcb $04,$04,$04,$04,$04,$04,$04,$04
+dcb $05,$05,$05,$05,$05,$05,$05,$05,
+ 
+table_low:
+dcb $00,$20,$40,$60,$80,$a0,$c0,$e0
+dcb $00,$20,$40,$60,$80,$a0,$c0,$e0
+dcb $00,$20,$40,$60,$80,$a0,$c0,$e0
+dcb $00,$20,$40,$60,$80,$a0,$c0,$e0
+
