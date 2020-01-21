@@ -1,81 +1,266 @@
-; Option 5
-
-; zero-page variable locations
-define	A_ROW		$00	; cursor A ROW position
-define	A_COL		$01	; cursor B COL position
-define	A_PTR		$02	; pointer to cursor A in screen memory
-define	A_PTR_H		$03	; ... high byte of above
-
-define 	B_ROW		$10	; Same for cursor B...
-define	B_COL		$11
-define	B_PTR		$12
-define	B_PTR_H		$13
-
-define	MODE		$20	; Mode: bit 0 (0=row, 1=col); bit 1 (0=inc, 1=dec)
-define	DELTA		$21	; 16-bit fixed-point delta value, radix=8
-define	DELTA_H		$22
-define	COL		$23	; 16-bit fixed-point COL position for line draw
-define	COL_H		$24	; ... this is the integer portion
-define	ROW		$25	; 16-bit fixed-point ROW position for line draw
-define	ROW_H		$26	; ... this is the integer portion
-define	PTR		$27	; pointer to (ROW_H,COL_H) address on screen
-define	PTR_H		$28	
+; Option 5 - two-cursor line drawing program
 
 ; constants
-define	A_ROW_S		$08	; starting position for A_ROW
-define	A_COL_S		$08	; starting position for A_COL
-define	B_ROW_S		$18	; starting position for B_ROW
-define	B_COL_S		$08	; starting position for B_COL
-define	A_COLOUR	$0d	; colour of cursor A
-define	B_COLOUR	$0e	; colour of cursor B
-define	L_COLOUR	$01	; line colour
+define  A_ROW_S         $08     ; starting position for A_ROW
+define  A_COL_S         $08     ; starting position for A_COL
+define  B_ROW_S         $18     ; starting position for B_ROW
+define  B_COL_S         $18     ; starting position for B_COL
+define  A_COLOUR        $0d     ; colour of cursor A
+define  B_COLOUR        $0e     ; colour of cursor B
+define  L_COLOUR        $01     ; line colour
 
-define	A_UP		$80	; cursor B key controls (arrows)
-define	A_RIGHT		$81
-define	A_DOWN		$82
-define	A_LEFT		$83
+define  A_UP            $80     ; cursor B key controls (arrows)
+define  A_RIGHT         $81
+define  A_DOWN          $82
+define  A_LEFT          $83
 
-define	B_UP		$38	; cursor B key controls (number pad)
-define	B_RIGHT		$36
-define	B_DOWN		$32
-define	B_LEFT		$34
+define  B_UP            $38     ; cursor B key controls (number pad)
+define  B_RIGHT         $36
+define  B_DOWN          $32
+define  B_LEFT          $34
+
+; zero-page variable locations
+define  A_ROW           $00     ; cursor A ROW position
+define  A_COL           $01     ; cursor B COL position
+define  A_PTR           $02     ; pointer to cursor A in screen memory
+define  A_PTR_H         $03     ; ... high byte of above
+
+define  B_ROW           $10     ; Same for cursor B...
+define  B_COL           $11
+define  B_PTR           $12
+define  B_PTR_H         $13
+
+define  MODE_XY         $20     ; Mode: 0: X+=1, Y+=DELTA; 1: Y+=1, X+=DELTA
+define  DELTA           $21     ; 16-bit fixed-point rise/run or run/rise delta value, radix=8
+define  DELTA_H         $22
+define  COL             $23     ; 16-bit fixed-point COL position for line draw
+define  COL_H           $24     ; ... this is the integer portion
+define  ROW             $25     ; 16-bit fixed-point ROW position for line draw
+define  ROW_H           $26     ; ... this is the integer portion
+define  PTR             $27     ; pointer to (ROW_H,COL_H) address on screen
+define  PTR_H           $28
+define  DELTA_NEG       $29     ; DELTA value is negative
+define	DELTA_X		$2a	; abs(A_COL-B_COL)
+define	DELTA_X_NEG	$2b	; A_COL<B_COL
+define	DELTA_Y		$2c	; abs(A_ROW-B_ROW)
+define	DELTA_Y_NEG	$2d	; A_ROW<B_ROW
+define	END		$2e	; ending row or column for line
+
+define	DIVIDEND	$30	; 16-bit dividend
+define	DIVIDEND_H	$31
+define	DIVISOR		$32	; 16-bit divisor
+define	DIVISOR_H	$33
+define	QUOTIENT	$34	; 16-bit quotient
+define	QUOTIENT_H	$35
+define	TRACKER		$36	; 16-bit shift tracker for division
+define	TRACKER_H	$37
+
+
+; IO addresses
+define	KEY		$ff	; i/o port to get last key pressed
+
+; ------------------------------------------------------------------------
 
 ; initialize
-	lda	#A_ROW_S
-	sta	A_ROW
-	lda 	#A_COL_S
-	sta	A_COL
-	lda 	#B_ROW_S
-	sta 	B_ROW
-	lda	#B_COL_S
-	sta	B_COL
+	        lda     #A_ROW_S
+	        sta     A_ROW
+	        lda     #A_COL_S
+	        sta     A_COL
+	        lda     #B_ROW_S
+	        sta     B_ROW
+	        lda     #B_COL_S
+	        sta     B_COL
 
 ; draw cursor positions
-	jsr	C_GOTO		; update the cursor pointers based on coordinates positions
-	brk
+draw:   	jsr C_GOTO	; update the cursor pointers based on coordinates positions
 
+		lda #A_COLOUR
+		ldy #$00
+		sta (A_PTR),y
+
+		lda #B_COLOUR
+		sta (B_PTR),y
+
+
+; get and handle keystroke
+getkey:		lda KEY
+		beq getkey
+
+		ldx #$00
+		stx KEY
+
+		cmp #A_UP
+		bne not_a_up
+		dec A_ROW
+		clc
+		bcc done_keys
+
+not_a_up:	cmp #A_RIGHT
+		bne not_a_right
+		inc A_COL
+		clc
+		bcc done_keys
+
+not_a_right:	cmp #A_DOWN
+		bne not_a_down
+		inc A_ROW
+		clc
+		bcc done_keys
+
+not_a_down:	cmp #A_LEFT
+		bne not_a_left
+		dec A_COL
+		clc
+		bcc done_keys
+
+not_a_left:	cmp #B_UP
+		bne not_b_up
+		dec B_ROW
+		clc
+		bcc done_keys
+
+not_b_up:	cmp #B_RIGHT
+		bne not_b_right
+		inc B_COL
+		clc
+		bcc done_keys
+
+not_b_right:	cmp #B_DOWN
+		bne not_b_down
+		inc B_ROW
+		clc
+		bcc done_keys
+
+not_b_down:	cmp #B_LEFT
+		bne not_b_left
+		dec B_COL
+		clc
+		bcc done_keys
+
+not_b_left:
+done_keys:	
+
+; draw the line between the cursors
+; step 1: get absolute deltaX and deltaY
+		lda A_ROW
+		sec
+		sbc B_ROW
+		bmi row_neg
+
+		ldx #$00
+		stx DELTA_Y_NEG
+		sta DELTA_Y
+		clc
+		bcc do_delta_x
+
+row_neg:	lda B_ROW
+		sec
+		sbc A_ROW
+
+		ldx #$01
+		stx DELTA_Y_NEG
+		sta DELTA_Y
+
+do_delta_x:	lda A_COL
+		sec
+		sbc B_COL
+		bmi col_neg
+
+		ldx #$00
+		stx DELTA_X_NEG
+		sta DELTA_X
+		clc
+		bcc done_delta
+
+col_neg:	lda B_COL
+		sec
+		sbc A_COL
+
+		ldx #$01
+		stx DELTA_X_NEG
+		sta DELTA_X
+
+; Step 2: see if DELTA_X>DELTA_Y
+done_delta:	ldx #$00
+		lda DELTA_X
+		cmp DELTA_Y
+		bmi y_gt_x
+
+		inx		; DELTA_X<=DELTA_Y, so DELTA=DELTA_X/DELTA_Y
+
+		lda #$00
+		sta DIVIDEND
+		lda DELTA_Y
+		sta DIVIDEND_H
+
+		lda #$00
+		sta DIVISOR
+		lda DELTA_X
+		sta DIVISOR_H
+
+		clc
+		bcc done_delta_cmp
+
+y_gt_x:		lda #$00
+		sta DIVIDEND
+		lda DELTA_X
+		sta DIVIDEND_H
+
+		lda #$00
+		sta DIVISOR
+		lda DELTA_Y
+		sta DIVISOR_H
+
+done_delta_cmp:	jsr DIVIDE
+
+		lda QUOTIENT
+		sta DELTA
+		lda QUOTIENT_H
+		sta DELTA_H
+
+		stx MODE_XY	; MODE_XY=0 if DELTA_X>DELTA_Y
+
+		jmp draw
 
 ; ----- Update cursor position based on coordinates
 
-C_GOTO:	lda A_ROW	; ensure ROW is in range 0:31
-	and #$1f
-	sta A_ROW
+C_GOTO: 	lda A_ROW       ; ensure ROW is in range 0:31
+        	and #$1f
+        	sta A_ROW
 
-	lda A_COL	; ensure COL is in range 0:31
-	and #$1f
-	sta A_COL
+        	lda A_COL       ; ensure COL is in range 0:31
+        	and #$1f
+        	sta A_COL
 
-	ldy A_ROW	; load POINTER with start-of-row
-	lda table_low,y
-	clc
-	adc A_COL
-	sta A_PTR
-	lda table_high,y
-	adc #$00
-	sta A_PTR_H
+        	ldy A_ROW       ; load pointer with start-of-row
+        	lda table_low,y
+        	clc
+        	adc A_COL
+        	sta A_PTR
+        	lda table_high,y
+        	adc #$00
+        	sta A_PTR_H
 
+		lda B_ROW       ; ensure ROW is in range 0:31
+        	and #$1f
+        	sta B_ROW
+	
+        	lda B_COL       ; ensure COL is in range 0:31
+        	and #$1f
+        	sta B_COL
 
-; ----- Data tables
+        	ldy B_ROW       ; load pointer with start-of-row
+        	lda table_low,y
+        	clc
+        	adc B_COL
+        	sta B_PTR
+        	lda table_high,y
+        	adc #$00
+        	sta B_PTR_H
+
+		rts
+
+; ----- address tables
 ; these two tables contain the high and low bytes
 ; of the addresses of the start of each row
  
@@ -90,4 +275,63 @@ dcb $00,$20,$40,$60,$80,$a0,$c0,$e0
 dcb $00,$20,$40,$60,$80,$a0,$c0,$e0
 dcb $00,$20,$40,$60,$80,$a0,$c0,$e0
 dcb $00,$20,$40,$60,$80,$a0,$c0,$e0
+
+
+
+; ------------------------------------------------------------------------
+; divide DIVIDEND by DIVISOR, result in QUOTIENT
+; using fixed-point 16-bit math with radix 8
+; assumes that QUOTIENT<=1
+
+DIVIDE:		lda #$00
+		sta QUOTIENT
+		sta QUOTIENT_H
+		sta TRACKER
+		lda #$01
+		sta TRACKER_H
+
+; -- subtract DIVISOR from DIVIDEND
+divide_sub:	lda DIVIDEND
+		sec
+		sbc DIVISOR
+		tax
+
+		lda DIVIDEND_H
+		sbc DIVISOR_H
+
+		bcc divide_ror		; DIVISOR > DIVIDEND
+
+		stx DIVIDEND
+		sta DIVIDEND_H
+
+		lda QUOTIENT
+		ora TRACKER
+		sta QUOTIENT
+
+		lda QUOTIENT_H
+		ora TRACKER_H
+		sta QUOTIENT_H
+
+		clc
+		bcc divide_ror
+
+divide_ror:	clc
+		ror TRACKER_H
+		ror TRACKER
+
+		lda TRACKER
+		ora TRACKER_H
+
+		beq divide_done
+
+		clc
+		ror DIVISOR_H
+		ror DIVISOR
+
+		inc SCREEN_PTR
+
+		bne divide_sub
+
+divide_done:	rts
+
 
