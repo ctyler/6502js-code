@@ -1,4 +1,5 @@
-; Option 5 - two-cursor line drawing program
+; Solution for SPO600 Winter 2020 Lab 3 Option 5 - two-cursor line drawing program
+; (C)2020 Chris Tyler - Licensed under GPLv2+
 
 ; constants
 define  A_ROW_S         $08     ; starting position for A_ROW
@@ -164,7 +165,7 @@ done_keys:
                 sbc B_ROW
                 bmi row_neg
 
-                ldx #$00
+                ldx #$01
                 stx DELTA_Y_NEG
                 sta DELTA_Y
                 clc
@@ -174,7 +175,7 @@ row_neg:        lda B_ROW
                 sec
                 sbc A_ROW
 
-                ldx #$01
+                ldx #$00
                 stx DELTA_Y_NEG
                 sta DELTA_Y
 
@@ -183,7 +184,7 @@ do_delta_x:     lda A_COL
                 sbc B_COL
                 bmi col_neg
 
-                ldx #$00
+                ldx #$01
                 stx DELTA_X_NEG
                 sta DELTA_X
                 clc
@@ -193,7 +194,7 @@ col_neg:        lda B_COL
                 sec
                 sbc A_COL
 
-                ldx #$01
+                ldx #$00
                 stx DELTA_X_NEG
                 sta DELTA_X
 
@@ -206,6 +207,9 @@ done_delta:     ldx #$00
                 bmi y_gt_x
 
                 inx             ; DELTA_X<=DELTA_Y, so DELTA=DELTA_X/DELTA_Y
+
+		lda DELTA_Y_NEG
+		sta DELTA_NEG
 
                 lda #$00
                 sta DIVIDEND
@@ -220,7 +224,10 @@ done_delta:     ldx #$00
                 clc
                 bcc done_delta_cmp
 
-y_gt_x:         lda #$00
+y_gt_x:         lda DELTA_X_NEG
+		sta DELTA_NEG
+
+		lda #$00
                 sta DIVIDEND
                 lda DELTA_X
                 sta DIVIDEND_H
@@ -248,9 +255,9 @@ done_delta_cmp: jsr DIVIDE
 		sta ROW
 		sta COL
 		lda A_COL
-		sta COL_HIGH
+		sta COL_H
 		lda A_ROW
-		sta ROW_HIGH
+		sta ROW_H
 
 		lda MODE_XY
 		beq mode_x
@@ -266,6 +273,9 @@ l_loop_x:	jsr L_DRAW	; draw pixel
 		cmp END
 		beq l_done	; done the line
 
+		ldx DELTA_NEG	; see if we need to add or subtract DELTA
+		bne llx_delta_neg
+
 		lda ROW		; ROW += DELTA
 		clc
 		adc DELTA
@@ -277,7 +287,50 @@ l_loop_x:	jsr L_DRAW	; draw pixel
 		clc
 		bcc l_loop_x
 
-mode_x:
+llx_delta_neg:	lda ROW		; ROW -= DELTA
+		sec
+		sbc DELTA
+		sta ROW
+		lda ROW_H
+		sbc DELTA_H
+		sta ROW_H
+
+		clc
+		bcc l_loop_x
+
+mode_x:		lda B_ROW	; for (COL=A_COL; COL<=B_COL; COL+=1) { ROW += DELTA ; draw pixel)
+		sta END
+
+l_loop_y:	jsr L_DRAW	; draw pixel
+
+		inc ROW_H	; COL+=1 -- will not overflow since screen is 32 pixels wide
+
+		lda ROW_H
+		cmp END
+		beq l_done	; done the line
+
+		ldx DELTA_NEG	; see if we need to add or subtract DELTA
+		bne lly_delta_neg
+
+		lda COL		; COL += DELTA
+		clc
+		adc DELTA
+		sta COL
+		lda COL_H
+		adc DELTA_H
+		sta COL_H
+
+		clc
+		bcc l_loop_y
+
+lly_delta_neg:	lda COL		; COL -= DELTA
+		sec
+		sbc DELTA
+		sta COL
+		lda COL_H
+		sbc DELTA_H
+		sta COL_H
+
 l_done:		jmp draw
 
 ; ----- Draw one pixel of the line
@@ -367,7 +420,13 @@ dcb $00,$20,$40,$60,$80,$a0,$c0,$e0
 ; using fixed-point 16-bit math with radix 8
 ; assumes that QUOTIENT<=1
 
-DIVIDE:         lda #$00
+DIVIDE:         pha
+		tya
+		pha
+		txa
+		pha
+
+		lda #$00
                 sta QUOTIENT
                 sta QUOTIENT_H
                 sta TRACKER
@@ -416,4 +475,10 @@ divide_ror:     clc
 
                 bne divide_sub
 
-divide_done:    rts
+divide_done:    pla
+		tax
+		pla
+		tay
+		pla
+
+		rts
