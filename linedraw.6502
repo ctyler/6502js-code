@@ -62,14 +62,14 @@ define  KEY             $ff     ; i/o port to get last key pressed
 ; ------------------------------------------------------------------------
 
 ; initialize
-                lda     #A_ROW_S
-                sta     A_ROW
-                lda     #A_COL_S
-                sta     A_COL
-                lda     #B_ROW_S
-                sta     B_ROW
-                lda     #B_COL_S
-                sta     B_COL
+                lda #A_ROW_S	; set initial cursor positions
+                sta A_ROW
+                lda #A_COL_S
+                sta A_COL
+                lda #B_ROW_S
+                sta B_ROW
+                lda #B_COL_S
+                sta B_COL
 
 ; draw cursor positions
 draw:           jsr C_GOTO      ; update the cursor pointers based on coordinates positions
@@ -88,6 +88,23 @@ getkey:         lda KEY		; get a keystroke
 
                 ldx #$00	; clear keystroke 
                 stx KEY
+
+		pha		; save A
+
+		lda #$02	; clear the screen
+		sta PTR_H
+		lda #$00
+		sta PTR
+		tay
+clear:		sta (PTR),y
+		iny
+		bne clear
+		inc PTR_H
+		ldx PTR_H
+		cpx #$06
+		bne clear
+
+		pla
 
                 cmp #A_UP	; check for a key
                 bne not_a_up	; skip to next check if no match
@@ -222,7 +239,72 @@ done_delta_cmp: jsr DIVIDE
 
                 stx MODE_XY     ; MODE_XY=0 if DELTA_X>DELTA_Y
 
-                jmp draw
+; Step 3: Draw the line
+
+; --- Initialize the line position to the starting coordinates
+; FIXME: assume that cursor A is on the left
+
+		lda #$00
+		sta ROW
+		sta COL
+		lda A_COL
+		sta COL_HIGH
+		lda A_ROW
+		sta ROW_HIGH
+
+		lda MODE_XY
+		beq mode_x
+
+mode_y:		lda B_COL	; for (COL=A_COL; COL<=B_COL; COL+=1) { ROW += DELTA ; draw pixel)
+		sta END
+
+l_loop_x:	jsr L_DRAW	; draw pixel
+
+		inc COL_H	; COL+=1 -- will not overflow since screen is 32 pixels wide
+
+		lda COL_H
+		cmp END
+		beq l_done	; done the line
+
+		lda ROW		; ROW += DELTA
+		clc
+		adc DELTA
+		sta ROW
+		lda ROW_H
+		adc DELTA_H
+		sta ROW_H
+
+		clc
+		bcc l_loop_x
+
+mode_x:
+l_done:		jmp draw
+
+; ----- Draw one pixel of the line
+
+L_DRAW:		lda ROW_H	; ensure ROW is in range 0:31
+		and #$1f
+		sta ROW_H
+
+		lda COL_H	; enseure COL is in range 0:31
+		and #$1f
+		sta COL_H
+
+		ldy ROW_H
+		lda table_low,y
+		clc
+		adc COL_H
+		sta PTR
+
+		lda table_high,y
+		adc #$00
+		sta PTR_H
+
+		lda #L_COLOUR
+		ldy #$00
+		sta (PTR),y
+
+		rts
 
 ; ----- Update cursor position based on coordinates
 
