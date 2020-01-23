@@ -16,10 +16,10 @@ define  A_RIGHT         $81
 define  A_DOWN          $82
 define  A_LEFT          $83
 
-define  B_UP            $38     ; cursor B key controls (number pad)
-define  B_RIGHT         $36
-define  B_DOWN          $32
-define  B_LEFT          $34
+define  B_UP            $77     ; cursor B key controls (a/w/s/z)
+define  B_RIGHT         $73
+define  B_DOWN          $7a
+define  B_LEFT          $61
 
 
 ; zero-page variable locations
@@ -32,11 +32,6 @@ define  B_ROW           $04     ; Same for cursor B...
 define  B_COL           $05
 define  B_PTR           $06
 define  B_PTR_H         $07
-
-define	AA_ROW		$08	; Copies of A/B coordinates (that can be swapped)
-define	AA_COL		$09
-define	BB_ROW		$0a
-define	BB_COL		$0b
 
 define  MODE_XY         $20     ; Mode: 0: X+=1,Y+=DELTA; 1: Y+=1,X+=DELTA
 define  DELTA           $21     ; 16-bit fixed-point rise/run or run/rise delta value, radix=8
@@ -53,6 +48,7 @@ define  DELTA_X_NEG     $2b     ; A_COL<B_COL
 define  DELTA_Y         $2c     ; abs(A_ROW-B_ROW)
 define  DELTA_Y_NEG     $2d     ; A_ROW<B_ROW
 define  END             $2e     ; ending row or column for line
+define	STEP_NEG	$2f	; whether the 1-pixel step is positive or negative
 
 define  DIVIDEND        $30     ; 16-bit dividend
 define  DIVIDEND_H      $31
@@ -150,15 +146,6 @@ not_b_left:
 done_keys:	jsr C_CHECK	; ensure cursors are within bounds
 
 ; draw the line between the cursors
-; --- Step 0: Copy A/B coordinates to AA/BB
-		lda A_ROW
-		sta AA_ROW
-		lda A_COL
-		sta AA_COL
-		lda B_ROW
-		sta BB_ROW
-		lda B_COL
-		sta BB_COL
 
 ; --- Step 1: get absolute deltaX and deltaY
                 lda A_ROW
@@ -199,10 +186,32 @@ col_neg:        lda B_COL
                 stx DELTA_X_NEG
                 sta DELTA_X
 
-; --- Step 2: see if DELTA_X>DELTA_Y, and based on the result, set the MODE_XY,
+; --- Step 2: Clear the screen - FIXME: add compose step here when line-drop functionality added
+
+done_delta:	lda #$02	; clear the screen
+		sta PTR_H
+		lda #$00
+		sta PTR
+		tay
+clear:		sta (PTR),y
+		iny
+		bne clear
+		inc PTR_H
+		ldx PTR_H
+		cpx #$06
+		bne clear
+
+
+; --- Step 3: see if DELTA_X>DELTA_Y, and based on the result, set the MODE_XY,
 ;     DELTA, and DELTA_NEG values.
 
-done_delta:     ldx #$00
+		lda DELTA_X	; If delta values are both 0, no line to draw
+		ora DELTA_Y
+		bne need_line
+
+		jmp l_done
+
+need_line:	ldx #$00
                 lda DELTA_X
                 cmp DELTA_Y
                 bmi y_gt_x
@@ -211,6 +220,8 @@ done_delta:     ldx #$00
 
 		lda DELTA_Y_NEG
 		sta DELTA_NEG
+		lda DELTA_X_NEG
+		sta STEP_NEG
 
                 lda #$00
                 sta DIVIDEND
@@ -227,6 +238,8 @@ done_delta:     ldx #$00
 
 y_gt_x:         lda DELTA_X_NEG
 		sta DELTA_NEG
+		lda DELTA_Y_NEG
+		sta STEP_NEG
 
 		lda #$00
                 sta DIVIDEND
@@ -247,22 +260,6 @@ done_delta_cmp: jsr DIVIDE
 
                 stx MODE_XY     ; MODE_XY=0 if DELTA_X>DELTA_Y
 
-; --- Step 3: Clear the screen - FIXME: add compose step here when line-drop functionality added
-
-		lda #$02	; clear the screen
-		sta PTR_H
-		lda #$00
-		sta PTR
-		tay
-clear:		sta (PTR),y
-		iny
-		bne clear
-		inc PTR_H
-		ldx PTR_H
-		cpx #$06
-		bne clear
-
-
 ; --- Step 4: Draw the line
 
 		lda #$00
@@ -281,9 +278,14 @@ mode_y:		lda B_COL	; for (COL=A_COL; COL<=B_COL; COL+=1) { ROW += DELTA ; draw p
 
 l_loop_x:	jsr L_DRAW	; draw pixel
 
+		lda STEP_NEG
+		bne llx_step_neg
 		inc COL_H	; COL+=1 -- will not overflow since screen is 32 pixels wide
+		bne llx_step_done
 
-		lda COL_H
+llx_step_neg:	dec COL_H	; COL-=1
+
+llx_step_done:	lda COL_H
 		cmp END
 		beq l_done	; done the line
 
@@ -317,9 +319,15 @@ mode_x:		lda B_ROW	; for (COL=A_COL; COL<=B_COL; COL+=1) { ROW += DELTA ; draw p
 
 l_loop_y:	jsr L_DRAW	; draw pixel
 
-		inc ROW_H	; COL+=1 -- will not overflow since screen is 32 pixels wide
+		lda STEP_NEG
+		bne lly_step_neg
 
-		lda ROW_H
+		inc ROW_H	; COL+=1 -- will not overflow since screen is 32 pixels wide
+		bne lly_step_done
+
+lly_step_neg:	dec ROW_H	; COL-=1
+
+lly_step_done:	lda ROW_H
 		cmp END
 		beq l_done	; done the line
 
