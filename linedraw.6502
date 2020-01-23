@@ -100,9 +100,6 @@ getkey:         lda KEY		; get a keystroke
                 ldx #$00	; clear keystroke 
                 stx KEY
 
-		pha		; save A
-		pla		; restore A
-
                 cmp #A_UP	; check for the A_UP key
                 bne not_a_up	; skip to next check if no match
                 dec A_ROW	; handle the key
@@ -153,6 +150,16 @@ not_b_left:
 done_keys:	jsr C_CHECK	; ensure cursors are within bounds
 
 ; draw the line between the cursors
+; --- Step 0: Copy A/B coordinates to AA/BB
+		lda A_ROW
+		sta AA_ROW
+		lda A_COL
+		sta AA_COL
+		lda B_ROW
+		sta BB_ROW
+		lda B_COL
+		sta BB_COL
+
 ; --- Step 1: get absolute deltaX and deltaY
                 lda A_ROW
                 sec
@@ -483,7 +490,7 @@ divide_ror:     clc		; rotate TRACKER right
                 ror DIVISOR
 
 		clc
-                bcc divide_sub	; continue if DIVISOR>0
+                bcc divide_sub	; continue
 
 divide_done:    pla		; restore registers
 		tax
