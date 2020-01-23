@@ -56,6 +56,8 @@ define  QUOTIENT_H      $35
 define  TRACKER         $36     ; 16-bit shift tracker for division
 define  TRACKER_H       $37
 
+define	DEBUG_COLSTART	$a0
+define	DEBUG_ROWSTART	$a1
 
 ; IO addresses
 define  KEY             $ff     ; i/o port to get last key pressed
@@ -91,21 +93,7 @@ getkey:         lda KEY		; get a keystroke
                 stx KEY
 
 		pha		; save A
-
-		lda #$02	; clear the screen
-		sta PTR_H
-		lda #$00
-		sta PTR
-		tay
-clear:		sta (PTR),y
-		iny
-		bne clear
-		inc PTR_H
-		ldx PTR_H
-		cpx #$06
-		bne clear
-
-		pla
+		pla		; restore A
 
                 cmp #A_UP	; check for a key
                 bne not_a_up	; skip to next check if no match
@@ -156,7 +144,8 @@ not_b_down:     cmp #B_LEFT
                 bcc done_keys
 
 not_b_left:
-done_keys:
+done_keys:	jsr C_CHECK	; ensure cursors are within bounds
+
 
 ; draw the line between the cursors
 ; step 1: get absolute deltaX and deltaY
@@ -246,7 +235,24 @@ done_delta_cmp: jsr DIVIDE
 
                 stx MODE_XY     ; MODE_XY=0 if DELTA_X>DELTA_Y
 
-; Step 3: Draw the line
+; Step 3: Clear the screen - FIXME: add composite step here when line-drop functionality added
+
+
+		lda #$02	; clear the screen
+		sta PTR_H
+		lda #$00
+		sta PTR
+		tay
+clear:		sta (PTR),y
+		iny
+		bne clear
+		inc PTR_H
+		ldx PTR_H
+		cpx #$06
+		bne clear
+
+
+; Step 4: Draw the line
 
 ; --- Initialize the line position to the starting coordinates
 ; FIXME: assume that cursor A is on the left
@@ -256,8 +262,10 @@ done_delta_cmp: jsr DIVIDE
 		sta COL
 		lda A_COL
 		sta COL_H
+		sta DEBUG_COLSTART
 		lda A_ROW
 		sta ROW_H
+		sta DEBUG_ROWSTART
 
 		lda MODE_XY
 		beq mode_x
@@ -331,6 +339,9 @@ lly_delta_neg:	lda COL		; COL -= DELTA
 		sbc DELTA_H
 		sta COL_H
 
+		clc
+		bcc l_loop_y
+
 l_done:		jmp draw
 
 ; ----- Draw one pixel of the line
@@ -359,24 +370,15 @@ L_DRAW:		lda ROW_H	; ensure ROW is in range 0:31
 
 		rts
 
-; ----- Update cursor position based on coordinates
+; ----- Ensure cursor position is within bounds
 
-C_GOTO:         lda A_ROW       ; ensure ROW is in range 0:31
+C_CHECK:	lda A_ROW       ; ensure ROW is in range 0:31
                 and #$1f
                 sta A_ROW
 
                 lda A_COL       ; ensure COL is in range 0:31
                 and #$1f
                 sta A_COL
-
-                ldy A_ROW       ; load pointer with start-of-row
-                lda table_low,y
-                clc
-                adc A_COL
-                sta A_PTR
-                lda table_high,y
-                adc #$00
-                sta A_PTR_H
 
                 lda B_ROW       ; ensure ROW is in range 0:31
                 and #$1f
@@ -385,6 +387,19 @@ C_GOTO:         lda A_ROW       ; ensure ROW is in range 0:31
                 lda B_COL       ; ensure COL is in range 0:31
                 and #$1f
                 sta B_COL
+
+		rts 
+
+; ----- Update cursor position based on coordinates
+
+C_GOTO:         ldy A_ROW       ; load pointer with start-of-row
+                lda table_low,y
+                clc
+                adc A_COL
+                sta A_PTR
+                lda table_high,y
+                adc #$00
+                sta A_PTR_H
 
                 ldy B_ROW       ; load pointer with start-of-row
                 lda table_low,y
