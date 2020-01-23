@@ -1,6 +1,7 @@
 ; Solution for SPO600 Winter 2020 Lab 3 Option 5 - two-cursor line drawing program
 ; (C)2020 Chris Tyler - Licensed under GPLv2+
 
+
 ; constants
 define  A_ROW_S         $08     ; starting position for A_ROW
 define  A_COL_S         $08     ; starting position for A_COL
@@ -19,6 +20,7 @@ define  B_UP            $38     ; cursor B key controls (number pad)
 define  B_RIGHT         $36
 define  B_DOWN          $32
 define  B_LEFT          $34
+
 
 ; zero-page variable locations
 define  A_ROW           $00     ; cursor A ROW position
@@ -56,11 +58,10 @@ define  QUOTIENT_H      $35
 define  TRACKER         $36     ; 16-bit shift tracker for division
 define  TRACKER_H       $37
 
-define	DEBUG_COLSTART	$a0
-define	DEBUG_ROWSTART	$a1
 
 ; IO addresses
 define  KEY             $ff     ; i/o port to get last key pressed
+
 
 ; ------------------------------------------------------------------------
 
@@ -74,8 +75,11 @@ define  KEY             $ff     ; i/o port to get last key pressed
                 lda #B_COL_S
                 sta B_COL
 
+		lda #$01	; inject a dummy keystroke to provoke first line draw
+		sta KEY
+
 ; draw cursor positions
-draw:           jsr C_GOTO      ; update the cursor pointers based on coordinates positions
+draw:           jsr C_GOTO      ; update the cursor pointers based on coordinates
 
                 lda #A_COLOUR	; draw cursor A
                 ldy #$00
@@ -83,7 +87,6 @@ draw:           jsr C_GOTO      ; update the cursor pointers based on coordinate
 
                 lda #B_COLOUR	; draw cursor B
                 sta (B_PTR),y
-
 
 ; get and handle keystroke
 getkey:         lda KEY		; get a keystroke
@@ -95,13 +98,13 @@ getkey:         lda KEY		; get a keystroke
 		pha		; save A
 		pla		; restore A
 
-                cmp #A_UP	; check for a key
+                cmp #A_UP	; check for the A_UP key
                 bne not_a_up	; skip to next check if no match
                 dec A_ROW	; handle the key
                 clc
                 bcc done_keys	; skip rest of key handlers
 
-not_a_up:       cmp #A_RIGHT
+not_a_up:       cmp #A_RIGHT	; continue the pattern above for other keys...
                 bne not_a_right
                 inc A_COL
                 clc
@@ -140,15 +143,12 @@ not_b_right:    cmp #B_DOWN
 not_b_down:     cmp #B_LEFT
                 bne not_b_left
                 dec B_COL
-                clc
-                bcc done_keys
 
 not_b_left:
 done_keys:	jsr C_CHECK	; ensure cursors are within bounds
 
-
 ; draw the line between the cursors
-; step 1: get absolute deltaX and deltaY
+; --- Step 1: get absolute deltaX and deltaY
                 lda A_ROW
                 sec
                 sbc B_ROW
@@ -187,8 +187,8 @@ col_neg:        lda B_COL
                 stx DELTA_X_NEG
                 sta DELTA_X
 
-; Step 2: see if DELTA_X>DELTA_Y, and based on the result, set the MODE_XY,
-; DELTA, and DELTA_NEG values.
+; --- Step 2: see if DELTA_X>DELTA_Y, and based on the result, set the MODE_XY,
+;     DELTA, and DELTA_NEG values.
 
 done_delta:     ldx #$00
                 lda DELTA_X
@@ -235,8 +235,7 @@ done_delta_cmp: jsr DIVIDE
 
                 stx MODE_XY     ; MODE_XY=0 if DELTA_X>DELTA_Y
 
-; Step 3: Clear the screen - FIXME: add composite step here when line-drop functionality added
-
+; --- Step 3: Clear the screen - FIXME: add composite step here when line-drop functionality added
 
 		lda #$02	; clear the screen
 		sta PTR_H
@@ -252,20 +251,15 @@ clear:		sta (PTR),y
 		bne clear
 
 
-; Step 4: Draw the line
-
-; --- Initialize the line position to the starting coordinates
-; FIXME: assume that cursor A is on the left
+; --- Step 4: Draw the line
 
 		lda #$00
 		sta ROW
 		sta COL
 		lda A_COL
 		sta COL_H
-		sta DEBUG_COLSTART
 		lda A_ROW
 		sta ROW_H
-		sta DEBUG_ROWSTART
 
 		lda MODE_XY
 		beq mode_x
@@ -432,16 +426,16 @@ dcb $00,$20,$40,$60,$80,$a0,$c0,$e0
 
 ; ------------------------------------------------------------------------
 ; divide DIVIDEND by DIVISOR, result in QUOTIENT
-; using fixed-point 16-bit math with radix 8
+; using fixed-point 16-bit math with 8-bit radix
 ; assumes that QUOTIENT<=1
 
-DIVIDE:         pha
+DIVIDE:         pha		; save registers
 		tya
 		pha
 		txa
 		pha
 
-		lda #$00
+		lda #$00	; initialize QUOTIENT=0, TRACKER=$100
                 sta QUOTIENT
                 sta QUOTIENT_H
                 sta TRACKER
@@ -457,12 +451,12 @@ divide_sub:     lda DIVIDEND
                 lda DIVIDEND_H
                 sbc DIVISOR_H
 
-                bcc divide_ror          ; DIVISOR > DIVIDEND
+                bcc divide_ror	; DIVISOR > DIVIDEND
 
-                stx DIVIDEND
+                stx DIVIDEND	; update DIVIDEND
                 sta DIVIDEND_H
 
-                lda QUOTIENT
+                lda QUOTIENT	; QUOTIENT=QUOTIENT|TRACKER
                 ora TRACKER
                 sta QUOTIENT
 
@@ -470,10 +464,7 @@ divide_sub:     lda DIVIDEND
                 ora TRACKER_H
                 sta QUOTIENT_H
 
-                clc
-                bcc divide_ror
-
-divide_ror:     clc
+divide_ror:     clc		; rotate TRACKER right
                 ror TRACKER_H
                 ror TRACKER
 
@@ -482,15 +473,13 @@ divide_ror:     clc
 
                 beq divide_done
 
-                clc
+                clc		; rotate DIVISOR right
                 ror DIVISOR_H
                 ror DIVISOR
 
-                inc SCREEN_PTR
+                bne divide_sub	; continue if DIVISOR>0
 
-                bne divide_sub
-
-divide_done:    pla
+divide_done:    pla		; restore registers
 		tax
 		pla
 		tay
