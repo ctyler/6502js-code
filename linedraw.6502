@@ -28,10 +28,15 @@ define  A_COL           $01     ; cursor B COL position
 define  A_PTR           $02     ; pointer to cursor A in screen memory
 define  A_PTR_H         $03
 
-define  B_ROW           $10     ; Same for cursor B...
-define  B_COL           $11
-define  B_PTR           $12
-define  B_PTR_H         $13
+define  B_ROW           $04     ; Same for cursor B...
+define  B_COL           $05
+define  B_PTR           $06
+define  B_PTR_H         $07
+
+define	AA_ROW		$08	; Copies of A/B coordinates (that can be swapped)
+define	AA_COL		$09
+define	BB_ROW		$0a
+define	BB_COL		$0b
 
 define  MODE_XY         $20     ; Mode: 0: X+=1,Y+=DELTA; 1: Y+=1,X+=DELTA
 define  DELTA           $21     ; 16-bit fixed-point rise/run or run/rise delta value, radix=8
@@ -477,7 +482,8 @@ divide_ror:     clc		; rotate TRACKER right
                 ror DIVISOR_H
                 ror DIVISOR
 
-                bne divide_sub	; continue if DIVISOR>0
+		clc
+                bcc divide_sub	; continue if DIVISOR>0
 
 divide_done:    pla		; restore registers
 		tax
