@@ -11,7 +11,7 @@ define  A_COLOUR        $0d     ; colour of cursor A
 define  B_COLOUR        $0e     ; colour of cursor B
 define  L_COLOUR        $01     ; line colour
 
-define  A_UP            $80     ; cursor B key controls (arrows)
+define  A_UP            $80     ; cursor A key controls (arrows)
 define  A_RIGHT         $81
 define  A_DOWN          $82
 define  A_LEFT          $83
@@ -235,7 +235,7 @@ done_delta_cmp: jsr DIVIDE
 
                 stx MODE_XY     ; MODE_XY=0 if DELTA_X>DELTA_Y
 
-; --- Step 3: Clear the screen - FIXME: add composite step here when line-drop functionality added
+; --- Step 3: Clear the screen - FIXME: add compose step here when line-drop functionality added
 
 		lda #$02	; clear the screen
 		sta PTR_H
