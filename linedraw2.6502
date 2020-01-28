@@ -1,6 +1,5 @@
 ; Solution for SPO600 Winter 2020 Lab 3 Option 5 - two-cursor line drawing program
 ; Chris Tyler 2020. (C)2020 Seneca College. Licensed under GPLv2+
-; Notes on operation are at the bottom of the source.
 
 
 ; constants
@@ -11,7 +10,6 @@ define  B_COL_S         $18     ; starting position for B_COL
 define  A_COLOUR        $0d     ; colour of cursor A
 define  B_COLOUR        $0e     ; colour of cursor B
 define  L_COLOUR        $01     ; line colour
-define	BACK_COLOUR	$0f	; lines dropped on backing store colour
 
 define  A_UP            $80     ; cursor A key controls (arrows)
 define  A_RIGHT         $81
@@ -28,7 +26,6 @@ define	KEY_CLEAR	$63	; control to clear the screen
 
 define	BACK_STORE_L	$00	; low byte of backing store
 define	BACK_STORE_H	$a0	; high byte of backing store
-
 
 ; zero-page variable locations
 define  A_ROW           $00     ; cursor A ROW position
@@ -89,8 +86,6 @@ define  KEY             $ff     ; i/o port to get last key pressed
 
 		lda #$01	; inject a dummy keystroke to provoke first line draw
 		sta KEY
-
-		jsr CLEAR	; clear the backing store
 
 ; draw cursor positions
 draw:           jsr C_GOTO      ; update the cursor pointers based on coordinates
@@ -164,9 +159,9 @@ not_b_left:	cmp #KEY_CLEAR
 not_key_clear:	cmp #KEY_DROP
 		bne done_keys
 
-		lda #$00		; copy screen to backing store
+		lda #$02		; copy screen to backing store
 		sta PTR
-		lda #$02
+		lda #$00
 		sta PTR_H
 
 		lda #BACK_STORE_L
@@ -178,7 +173,7 @@ not_key_clear:	cmp #KEY_DROP
 
 back_loop:	lda (PTR),y
 		beq copy_to_back
-		lda #BACK_COLOUR
+		lda #BACK_LINE
 copy_to_back:	sta (BACK_PTR),y
 		iny
 		bne back_loop
@@ -246,7 +241,7 @@ done_delta:	lda #BACK_STORE_L
 		lda #$00
 		sta PTR
 		tay
-clear:		lda (BACK_PTR),y
+clear:		lda (BACK_PTR)
 		sta (PTR),y
 		iny
 		bne clear
@@ -565,51 +560,16 @@ divide_done:    pla		; restore registers
 ; --------------------------------------------------------------
 ; CLEAR - clear backing store
 
-CLEAR:		lda #BACK_STORE_H; clear the backing store
+CLEAR:		lda #BACK_PTR_H	; clear the backing store
 		sta PTR_H
-		lda #BACK_STORE_L
+		lda #BACK_PTR_L
 		sta PTR
-		lda #$00
 		ldy #$00
-
 back_clear:	sta (PTR),y
 		iny
-		bne back_clear
+		bne clear
 		inc PTR_H
 		ldx PTR_H
-		cpx #$a4
-		bne back_clear
+		cpx #$06
+		bne clear
 		rts
-
-; Notes on this code:
-
-; This program presents two cursors to the user. They can move one with the cursor
-; keys and the other with the a/w/s/z keys. A line is drawn between each of the
-; cursors. They can "drop" the line onto the background at any time with the "d"
-; key, which means that that line will persist (in gray) in the background of the
-; image. The "c" key clears the screen.
-
-; The program works by maintaining a backing-store -- an area of memory which
-; contains the background image. The backing store starts as all-black and is
-; copied to the background of the screen memory just before each time the cursors and
-; the cursor-line are drawn. The "d" key copies the screen memory to the backing-store,
-; changing all of the non-black pixels to gray. The "c" key clears the backing-
-; store to black.
-
-; In order to draw a line, the program checks to see if the distance between
-; the cursors is wider than it is tall. If so, then it calculates the rise
-; (vertical distance between cursors) divided by the run (horizontal distance
-; between the cursors). This is calculated and stored as a fixed-point value
-; (16 bit value with 8 integer bits and 8 fractional bits). For simplicity,
-; the sign is stored as a separate value. The code then sets the initial coordinates 
-; of the line-drawing routine to the position of the first cursor, and iterates 
-; horizontally one pixel at a time toward the secon cursor. Each time, it offsets
-; the vertical position that it is drawing by the rise/run value, including fractional
-; pixel positions. If the distance between cursors is taller than it is wide,
-; the code calculates run/rise and iterates vertically.
-
-; Shortcomings:
-; * The code is far from optimized!
-; * Negative flags should be dropped in favor of signed byets (at least for 1-byte values).
-; * The code does not handle shifted keyboard input (e.g., "A" instead of "a").
-; * There should be a help message displayed on the character display (e.g., keys)
