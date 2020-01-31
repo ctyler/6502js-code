@@ -1,27 +1,16 @@
-; screen I/O handling
-;
-; Available routines (inputs)
-;   PUT - output a printable or control character (A)
-;   CHROUT - output a printable character (A)
-;   GOTO - set SCREEN_PTR based on X and Y (none)
-;   C_UP, C_RIGHT, C_LEFT, C_DOWN - move cursor (none)
-;   C_RETURN - handle carriage return (none)
-;   C_BS - handle backspace (none)
-;   SCROLL - scroll screen (none)
-;   CLEAR - clear screen (none)
+; IO Routines for "ROM" and simple test code
 ;
 
 ; zero-page variables
-define		C_FLASH		$00
-define		X		$01
-define		Y		$02
-define		SCREEN_PTR	$03
-define		SCREEN_PTR_HI	$04
-define		SCROLL_SRC	$05
-define		SCROLL_SRC_HI	$06
-define		SCROLL_DST	$07
-define		SCROLL_DST_HI	$08
-define		TEMP_Y		$09
+define		X		$f5
+define		Y		$f6
+define		SCREEN_PTR	$f7
+define		SCREEN_PTR_HI	$f8
+define		SCROLL_SRC	$f9
+define		SCROLL_SRC_HI	$fa
+define		SCROLL_DST	$fb
+define		SCROLL_DST_HI	$fc
+define		TEMP_Y		$fd
 
 ; constants
 define		SCREEN_BASE	$f000 ; first char on screen
@@ -29,42 +18,41 @@ define		SCREEN_LAST	$f780 ; start of last row
 define		ROWS		25
 define		COLS		80
 
+; routine vectors/entry points
+define		SCINIT		$ff81 ; initialize/clear screen
+define		CHRIN		$ffcf ; get one char form keyboard
+define		CHROUT		$ffd2 ; output one char to screen
+define		SCREEN		$ffed ; get screen size
+define		PLOT		$fff0 ; get/set cursor coordinates
+
 ; main code
-		lda #$00
-		sta X
-		sta Y
+		jsr SCINIT
+		jsr CHRIN
 
-		lda #00
-		sta $ff
-
-loop:		jsr GOTO
-		ldy #$00
-		lda (SCREEN_PTR),y
+loop:		sec
+		jsr PLOT
 		ora #$80
-		sta (SCREEN_PTR),y
+		jsr CHROUT
+		lda #$83	; left
+		jsr CHROUT
 
-getkey:		lda $ff
+getkey:		jsr CHRIN
+		cmp #$00
 		beq getkey
 
-		ldx #00
-		stx $ff
-
 		pha
-
-		jsr GOTO
-		ldy #$00
-		lda (SCREEN_PTR),y
+		sec
+		jsr PLOT
 		and #$7f
-		sta (SCREEN_PTR),y
-
+		jsr CHROUT
+		lda #$83	; left
+		jsr CHROUT
 		pla
-		
-		jsr PUT
+		jsr CHROUT
 
-		clc
-		bcc loop
+		jmp loop
 
-*=$f900
+*=$fe00
 
 ; ==================================================
 ; GOTO :: position to (X,Y) on screen
@@ -106,7 +94,7 @@ dcb $F6,$F7,$F7
 ; PUT :: output a printable or control character
 ;        regA = character
 
-PUT:		cmp #$08
+R_PUT:		cmp #$08
 		beq C_BS
 		cmp #$0a
 		beq C_RETURN
@@ -125,8 +113,7 @@ PUT:		cmp #$08
 ; CHROUT :: output a printable character
 ;           regA = character
 
-CHROUT:		jsr GOTO
-		pha
+R_CHROUT:	jsr GOTO
 		sty TEMP_Y
 
 		ldy #$00
@@ -135,7 +122,6 @@ CHROUT:		jsr GOTO
 		jsr C_RIGHT
 
 		ldy TEMP_Y
-		pla
 		rts
 
 ; ==================================================
@@ -236,7 +222,7 @@ c_down_done:	pla
 		rts
 
 ; ==================================================
-; C_UP :: move cursor one position down
+; C_UP :: move cursor one position up
 
 C_UP:		dec Y
 		bpl c_up_done
@@ -245,12 +231,10 @@ C_UP:		dec Y
 
 c_up_done:	rts
 
-
-
 ; ==================================================
 ; CLEAR :: clear the screen
 
-CLEAR:		pha
+R_CLEAR:	pha
 		tya
 		pha
 
@@ -278,7 +262,49 @@ clear_loop:	sta (SCREEN_PTR),y
 		pla
 
 		rts
-		
+
+; ==================================================
+; SCROLL :: scroll screen up one line
+
+R_CHRIN:	lda $ff
+		beq chrin_done
+		pha
+		lda #$00
+		sta $ff
+		pla
+chrin_done:	rts
+
+; ==================================================
+; R_SCREEN :: return screen size
+
+R_SCREEN:	ldy #ROWS
+		ldx #COLS
+		rts
+
+; ==================================================
+; R_PLOT :: get/set screen position
+; 
+; C==0:	set cursor position to (X,Y)
+;       return pointer as Y=high, X=low
+;
+; C==1: read cursor position as (X,Y)
+;       return character at position in A
+
+R_PLOT:		bcs plot_read
+
+		stx X
+		sty Y
+		jsr GOTO
+		ldy SCREEN_PTR_HI
+		lda SCREEN_PTR
+		rts
+
+plot_read:	jsr GOTO
+		ldy #$00
+		lda (SCREEN_PTR),y
+		ldx X
+		ldy Y
+		rts
 
 ; ==================================================
 ; SCROLL :: scroll screen up one line
@@ -325,3 +351,22 @@ clear_last:	sta SCREEN_LAST,y
 		tay
 		pla
 		rts
+
+; ================================================
+;
+; Vector table / entry points
+
+*=$ff81	; SCINIT
+		jmp R_CLEAR
+
+*=$ffcf	; CHRIN
+		jmp R_CHRIN
+
+*=$ffd2	; CHROUT
+		jmp R_PUT
+
+*=$ffed	; SCREEN
+		jmp R_SCREEN
+
+*=$fff0	; PLOT
+		jmp R_PLOT
