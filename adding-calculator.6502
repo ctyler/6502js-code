@@ -1,0 +1,70 @@
+; Adding calculator
+
+; ROM routine entry points
+define		SCINIT		$ff81 ; initialize/clear screen
+define		CHRIN		$ffcf ; input character from keyboard
+define		CHROUT		$ffd2 ; output character to screen
+define		SCREEN		$ffed ; get screen size
+define		PLOT		$fff0 ; get/set cursor coordinates
+
+; zeropage variables
+define		PRINT_PTR	$10
+define		PRINT_PTR_H	$11
+
+; constants
+
+; --------------------------------------------------------
+
+		jsr SCINIT
+
+		jsr PRINT
+
+dcb "A","d","d","i","n","g",32,"c","a","l","c","u","l","a","t","o","r",$0d
+dcb $0d
+dcb "E","n","t","e","r",32,"a",32,"n","u","m","b","e","r",":",32
+
+		brk
+
+; --------------------------------------------------------
+; Print a message
+; 
+; Prints the message in memory immediately after the 
+; JSR PRINT. The message must be null-terminated and
+; 255 characters maximum in length.
+
+PRINT:		pla
+		clc
+		adc #$01
+		sta PRINT_PTR
+		pla
+		adc #$00
+		sta PRINT_PTR_H
+
+		tya
+		pha
+
+		ldy #$00
+print_next:	lda (PRINT_PTR),y
+		beq print_done
+		
+		jsr CHROUT
+		iny
+		jmp print_next
+
+print_done:	tya
+		clc
+		adc PRINT_PTR
+		sta PRINT_PTR
+
+		lda PRINT_PTR_H
+		sta PRINT_PTR_H
+
+		pla
+		tay
+
+		lda PRINT_PTR_H
+		pha
+		lda PRINT_PTR
+		pha
+
+		rts
