@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/bin/bash
 #
 # make-dcb :: simple script to convert text to DCB directives
 #
@@ -7,6 +7,6 @@
 #
 # Chris Tyler 2020-02-03 - Licensed under GPLv2+
 
-sed -e "s/$/\n/g" -e 's/\(.\)/"\1",/g' -e 's/" "/32/g' -e 's/"\n"/$0d/g'|sed -e 's/^/dcb /' -e 's/,$//'
+sed -e "s/$/\n/g" -e 's/\(.\)/"\1",/g' -e 's/" "/32/g' -e 's/"\n"/$0d/g'|sed 's/\([^,]*,[^,]*,[^,]*,[^,]*,[^,]*,[^,]*,[^,]*,[^,]*,[^,]*,[^,]*,[^,]*,[^,]*,\)/\n\1/g'|grep .|sed -e 's/^/dcb /' -e 's/,$//'
 echo "dcb 00"
 
