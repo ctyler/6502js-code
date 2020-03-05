@@ -2,7 +2,6 @@
 ; Chris Tyler 2020. (C)2020 Seneca College. Licensed under GPLv2+
 ; Notes on operation are at the bottom of the source.
 
-
 ; constants
 define  A_ROW_S         $08     ; starting position for A_ROW
 define  A_COL_S         $08     ; starting position for A_COL
@@ -74,11 +73,26 @@ define  TRACKER_H       $37
 ; IO addresses
 define  KEY             $ff     ; i/o port to get last key pressed
 
+; ROM routines
+define		SCINIT		$ff81 ; initialize/clear screen
+define		CHRIN		$ffcf ; input character from keyboard
+define		CHROUT		$ffd2 ; output character to screen
+define		SCREEN		$ffed ; get screen size
+define		PLOT		$fff0 ; get/set cursor coordinates
 
 ; ------------------------------------------------------------------------
 
 ; initialize
-                lda #A_ROW_S	; set initial cursor positions
+
+		jsr SCINIT	; reset character screen
+		ldy #$00
+printloop:	lda helpmsg,y	; print the help message
+		beq doneprint
+		jsr CHROUT
+		iny
+		bne printloop
+
+doneprint:      lda #A_ROW_S	; set initial cursor positions
                 sta A_ROW
                 lda #A_COL_S
                 sta A_COL
@@ -561,6 +575,21 @@ divide_done:    pla		; restore registers
 		pla
 
 		rts
+
+helpmsg:
+dcb $0d
+dcb 32,"L","I","N","E","D","R","A","W",$0d
+dcb $0d
+dcb 32,"C","u","r","s","o","r",32,"k","e","y","s"
+dcb 32,"-",32,"m","o","v","e",32,"g","r","e","e","n",32,"c","u","r","s","o","r",$0d
+dcb 32,"a","/","w","/","s","/","z",32,32,32,32
+dcb 32,"-",32,"m","o","v","e",32,"b","l","u","e",32,"c","u","r","s","o","r",$0d
+dcb 32,"d",32,32,32,32,32,32,32,32,32,32
+dcb 32,"-",32,"d","r","o","p",32,"l","i","n","e"
+dcb 32,"o","n","t","o",32,"b","a","c","k","g","r","o","u","n","d",$0d
+dcb 32,"c",32,32,32,32,32,32,32,32,32,32
+dcb 32,"-",32,"c","l","e","a","r",32,"s","c","r","e","e","n",$0d
+dcb 00
 
 ; --------------------------------------------------------------
 ; CLEAR - clear backing store
