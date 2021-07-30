@@ -103,7 +103,6 @@ PRINT:		pla
 		adc #$01
 		sta PRINT_PTR
 		pla
-		adc #$00
 		sta PRINT_PTR_H
 
 		tya
@@ -123,6 +122,7 @@ print_done:	tya
 		sta PRINT_PTR
 
 		lda PRINT_PTR_H
+		adc #$00
 		sta PRINT_PTR_H
 
 		pla
