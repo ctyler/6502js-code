@@ -632,7 +632,7 @@ back_clear:	sta (PTR),y
 ; (16 bit value with 8 integer bits and 8 fractional bits). For simplicity,
 ; the sign is stored as a separate value. The code then sets the initial coordinates 
 ; of the line-drawing routine to the position of the first cursor, and iterates 
-; horizontally one pixel at a time toward the secon cursor. Each time, it offsets
+; horizontally one pixel at a time toward the second cursor. Each time, it offsets
 ; the vertical position that it is drawing by the rise/run value, including fractional
 ; pixel positions. If the distance between cursors is taller than it is wide,
 ; the code calculates run/rise and iterates vertically.
