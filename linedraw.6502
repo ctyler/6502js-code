@@ -639,6 +639,6 @@ back_clear:	sta (PTR),y
 
 ; Shortcomings:
 ; * The code is far from optimized!
-; * Negative flags should be dropped in favor of signed byets (at least for 1-byte values).
+; * Negative flags should be dropped in favor of signed bytes (at least for 1-byte values).
 ; * The code does not handle shifted keyboard input (e.g., "A" instead of "a").
 ; * There should be a help message displayed on the character display (e.g., keys)
