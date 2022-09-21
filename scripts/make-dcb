@@ -4,6 +4,10 @@
 #
 # Reads stdin, outputs DCB statements compatible with 
 # the 6502js emulator at https://github.com/ctyler/6502js/
+# 
+# Bugs:
+# Doesn't handle commas properly, these need to be changed from "," to 
+# the appropriate decimal or hex code
 #
 # Chris Tyler 2020-02-03 - Licensed under GPLv2+
 

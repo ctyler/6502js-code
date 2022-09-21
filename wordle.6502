@@ -1,0 +1,700 @@
+; ROM routines
+define		SCINIT		$ff81 	; initialize/clear screen
+define		CHRIN		$ffcf 	; input keyboard character
+define		CHROUT		$ffd2 	; output character to screen
+define		SCREEN		$ffed 	; get screen size
+define		PLOT		$fff0 	; get/set cursor coordinates
+
+; constants
+define		MAXIN		5     	; maximum chars in input
+define		SPACE		$20   	; white space symbol
+define		CURSOR		$A0   	; black space symbol
+define		CURSOR_LEFT	$83   	; move cursor left
+define		BACKSPACE	$08   	; backspace character
+define		ENTER		$0d   	; ENTER character
+
+define	COLOUR_BLACK		$00	; graphics display colour codes
+define	COLOUR_WHITE		$01
+define	COLOUR_RED		$02
+define	COLOUR_CYAN		$03
+define	COLOUR_PURPLE		$04
+define	COLOUR_GREEN		$05
+define	COLOUR_BLUE		$06
+define	COLOUR_YELLOW		$07
+define	COLOUR_ORANGE		$08
+define	COLOUR_BROWN		$09
+define	COLOUR_LIGHT_RED	$0A
+define	COLOUR_DARK_GREY	$0B
+define	COLOUR_DARK_GRAY	$0B
+define	COLOUR_GREY		$0C
+define	COLOUR_GRAY		$0C
+define	COLOUR_LIGHT_GREEN	$0D
+define	COLOUR_LIGHT_BLUE	$0E
+define	COLOUR_LIGHT_GREY	$0F
+define	COLOUR_LIGHT_GRAY	$0F
+
+define	COLOR_BLACK		$00	; american spellings :-/
+define	COLOR_WHITE		$01
+define	COLOR_RED		$02
+define	COLOR_CYAN		$03
+define	COLOR_PURPLE		$04
+define	COLOR_GREEN		$05
+define	COLOR_BLUE		$06
+define	COLOR_YELLOW		$07
+define	COLOR_ORANGE		$08
+define	COLOR_BROWN		$09
+define	COLOR_LIGHT_RED		$0A
+define	COLOR_DARK_GREY		$0B
+define	COLOR_DARK_GRAY		$0B
+define	COLOR_GREY		$0C
+define	COLOR_GRAY		$0C
+define	COLOR_LIGHT_GREEN	$0D
+define	COLOR_LIGHT_BLUE	$0E
+define	COLOR_LIGHT_GREY	$0F
+define	COLOR_LIGHT_GRAY	$0F
+
+; zero-page locations
+define	GUESS_COUNT		$10	; number of guesses so far
+define	GREEN_COUNT		$11	; number of green dots
+define	CHAR_NUMBER		$12	; temp character number
+define	WORD_POINTER		$13	; pointer to selected random word
+define	WORD_POINTER_HI		$14	
+
+; other locations in memory
+define	GUESS_TEXT		$1000   ; 5 characters
+define	ANSWER_BUFFER		$1010	; copy of correct answer
+define	ANSWER			$1020	; correct answer
+
+	JSR SCINIT	; initialize screen
+
+	LDA #$00
+	STA WORD_POINTER_HI
+
+	LDA #$FE	; get a random byte value
+	STA WORD_POINTER
+
+	; convert random byte to a random word by
+	; multiplying it by 5 (chars/word) and adding
+	; the base address of the word list
+	ASL		; x2
+	ROL WORD_POINTER_HI
+	ASL		; x4
+	ASL WORD_POINTER_HI
+	CLC
+	ADC WORD_POINTER ; +1 = x5
+	STA WORD_POINTER
+	LDA #$00
+	ADC WORD_POINTER_HI
+	STA WORD_POINTER_HI
+
+	LDA WORD_POINTER	; add memory offset to word LIST
+	CLC
+	ADC #<WORD_LIST
+	STA WORD_POINTER
+	LDA #>WORD_LIST
+	ADC WORD_POINTER_HI
+	STA WORD_POINTER_HI
+
+	; copy the selected word to the ANSWER buffer
+	LDY #$00
+
+COPY_ANSWER_CHAR:
+	LDA (WORD_POINTER),Y
+	STA ANSWER,Y
+	INY
+	CPY #MAXIN
+	BNE COPY_ANSWER_CHAR
+
+NEW_GAME:
+	LDA #COLOUR_WHITE	; clear bitmap to white
+	JSR BM_CLEAR
+
+	LDA #$00	; initialize guess number to zero
+	STA GUESS_COUNT
+	
+; ---------------------------------------------------------------
+
+GET_GUESS:
+	JSR PRINT
+	dcb "E","n","t","e","r",32,"y","o","u","r",32
+	dcb "g","u","e","s","s",":",32,00
+
+	JSR GETINPUT		; get guess from the user
+	
+	; make a copy of the answer (so we can zero out used chars)
+	; ANSWER_BUFFER will contain $FF for any "green" character
+	; ANSWER_BUFFER will the ascii code for any other character
+	; ... this will get replaced with 0 if the character is used
+	;     for a "yellow" match (correct character in wrong position)                     
+	LDX #$00
+BUFFER_COPY_CHAR:
+	LDA ANSWER,X
+	CMP GUESS_TEXT,X
+	BNE NOT_GREEN
+	LDA #$FF
+
+NOT_GREEN:
+	STA ANSWER_BUFFER,X
+	INX
+	CPX #MAXIN
+	BNE BUFFER_COPY_CHAR
+	
+	; score the user's guess
+	LDY GUESS_COUNT		; row number is same as guess number
+	LDX #$00		; column number = character = 0
+	STX GREEN_COUNT		; count of green boxes
+
+CHECK_CHAR:
+	LDA GUESS_TEXT,X	; get char X of guess_text
+	LDA ANSWER_BUFFER,X	; check char X of answer
+	CMP #$FF		; see if it's already marked as a match
+	BEQ GREEN_DOT		; ... match, draw green dot
+
+	
+	STX CHAR_NUMBER		; save the character number
+	LDA GUESS_TEXT,X	; get char X of guess_text
+	LDX #$00		; load X with 0
+
+YELLOW_CHECK:
+	CMP ANSWER_BUFFER,X	; compare each char
+	BEQ YELLOW_DOT		; ... if match draw yellow dot
+	INX
+	CPX #MAXIN		; see if we've processed all chars
+	BNE YELLOW_CHECK	; ... check next char if not
+
+	LDX CHAR_NUMBER		; restore character number
+	LDA #COLOUR_BLACK	; draw black dot
+	JMP DRAW_DOT
+
+YELLOW_DOT:
+	LDA #$00		; zero out character from answer
+	STA ANSWER_BUFFER,X
+
+	LDX CHAR_NUMBER		; restore character number
+
+	LDA #COLOUR_YELLOW
+	JMP DRAW_DOT
+
+GREEN_DOT:
+	INC GREEN_COUNT
+
+	LDA #$00		; zero out character from answer
+	STA ANSWER_BUFFER,X
+
+	LDA #COLOUR_GREEN
+
+DRAW_DOT:
+	JSR BM_BIGDOT
+
+	INX
+	CPX #MAXIN	; check to see if we've processed all chars
+	BNE CHECK_CHAR	; ... process nexts char if not
+
+	LDA GREEN_COUNT	; see if last guess was 5 green boxes
+	CMP #5
+	BEQ WIN
+
+	INC GUESS_COUNT	; increment guess number
+	LDA #6		; max number of guesses
+	CMP GUESS_COUNT	; have we hit max?
+	BNE GET_GUESS	; if not, get another guess
+
+	JSR PRINT
+	dcb "Y","o","u",32,"l","o","s","e",".",$0D,$00
+	JMP PLAY_AGAIN
+
+WIN:
+	JSR PRINT
+	dcb "Y","o","u",32,"w","i","n","!",$0D,$0D,$0D,$00
+
+PLAY_AGAIN:
+	JSR PRINT
+	dcb "-","-","-","-","-","-","-",$0d
+	dcb "N","e","w",$20","g","a","m","e",".",".",".",$0D,$00
+	JMP NEW_GAME
+
+
+; ==============================================================
+
+GETINPUT:
+	LDY #$00	; count of input characters
+
+CURSOR_INPUT:
+	LDA #CURSOR	; draw cursor block and backspace on top
+	JSR CHROUT
+	LDA #CURSOR_LEFT
+	JSR CHROUT
+
+GETCHAR:
+	JSR CHRIN
+	CMP #$00	; compare with null
+	BEQ GETCHAR	; ... get another char if null
+
+	CMP #BACKSPACE	; compare with backspace
+	BNE NOT_BACKSPACE	; ... continue if not
+
+	CPY #$00	; do we have any characters?
+	BEQ GETCHAR	; ... get another char if not
+	DEY		; ... reduce character count by one
+	
+	LDA #SPACE	; draw space character and move 2 left
+	JSR CHROUT
+	LDA #CURSOR_LEFT
+	JSR CHROUT
+	JSR CHROUT	
+	JMP CURSOR_INPUT
+
+NOT_BACKSPACE:
+	CMP #ENTER	; compare with ENTER
+	BNE NOT_ENTER	; ... continue if not
+	CPY #MAXIN	; see if we have MAXIN characters
+	BNE NOT_ENTER	; ... continue if not
+	LDA #SPACE	; erase cursor
+	JSR CHROUT
+	LDA #ENTER	; move to next line
+	JSR CHROUT
+	RTS		; return
+
+NOT_ENTER:
+	CMP #65		; letter 'A'
+	BCC GETCHAR	; ... get another char if less
+	CMP #91		; letter 'Z' plus one
+	BCS GETCHAR	; ... get another char if >Z
+	CPY #MAXIN	; do we have max # chars?
+	BCS GETCHAR	; ... ignore and get another char if so
+
+	STA GUESS_TEXT,Y	; add character to input string
+	INY
+	JSR CHROUT	; print the character
+
+	JMP CURSOR_INPUT
+
+
+
+; ================================================
+
+BM_CLEAR:	; clear the bitmapped display
+		; A contains colour code to be used
+	LDY #$00
+BM_CLEAR_LOOP:
+	STA $0200,Y
+	STA $0300,Y
+	STA $0400,Y
+	STA $0500,Y
+	INY
+	BNE BM_CLEAR_LOOP
+	RTS
+
+; ================================================
+; zero-page locations used by this routine
+define	BM_PLOT_A		$00
+define	BM_PLOT_X		$01
+define	BM_PLOT_Y		$02
+define	BM_POINTER_LO		$03
+define	BM_POINTER_HI		$04
+
+BM_PLOT:	; plot a pixel on bitmap
+		; A contains colour code
+		; Y is Y-coordinate (0 at top)
+		; X is X-coordinate (0 at left)
+
+	STA BM_PLOT_A	; save register values
+	STX BM_PLOT_X
+	STY BM_PLOT_Y	
+
+	; multiply row number by 32 (pixels/row)
+	LDA #$00		; zero out the high byte
+	STA BM_POINTER_HI
+
+	STY BM_POINTER_LO	; store the Y value to the low byte
+
+	ASL BM_POINTER_LO	; *2
+	ASL BM_POINTER_LO	; *4
+	ASL BM_POINTER_LO	; *8
+	ASL BM_POINTER_LO	; *16 with carry
+	ROL BM_POINTER_HI
+	ASL BM_POINTER_LO	; *32 with carry
+	ROL BM_POINTER_HI
+
+	; now add the address of the bitmap
+	LDA #$02	; page number: bitmap start
+	CLC
+	ADC BM_POINTER_HI
+	STA BM_POINTER_HI
+
+	; restore the colour code
+	LDA BM_PLOT_A
+
+	; get column number into Y
+	LDY BM_PLOT_X
+
+	; store the colour code
+	STA (BM_POINTER_LO),Y
+
+	; restore the registers
+	LDY BM_PLOT_Y
+	LDX BM_PLOT_X
+
+	; return
+	RTS
+
+; ================================================
+
+; zero-page locations used by this routine
+define	BM_BIGDOT_A		$05
+define	BM_BIGDOT_X		$06
+define	BM_BIGDOT_Y		$07
+define	BM_BIGDOT_X5		$08
+define	BM_BIGDOT_HEIGHT	$09
+
+BM_BIGDOT:	; draw a big wordle dot (4x4 px)
+		; A is the colour code
+		; Y is the row (0-5)
+		; X is the column (0-4)
+
+	STA BM_BIGDOT_A	; save registers 
+	STX BM_BIGDOT_X
+	STY BM_BIGDOT_Y
+
+	; dots are 4x4 pixels with one pixel
+	; between each dot -- therefore multiply
+	; X and Y values by 5 to find upper-left
+	; corner of the dot
+
+	TYA
+	ASL	; x2
+	ASL	; x4
+	CLC	; add one more to get x5
+	ADC BM_BIGDOT_Y
+	TAY
+
+	TXA
+	ASL	; x2
+	ASL	; x4
+	CLC	; add one more to get x5
+	ADC BM_BIGDOT_X
+	TAX
+	STA BM_BIGDOT_X5
+
+	; set up a decrementing counter for rows
+	LDA #$04	; height/width in pixels
+	STA BM_BIGDOT_HEIGHT
+
+BM_BIGDOT_ROW:
+	LDX BM_BIGDOT_X5	; reset x coordinate
+	LDA BM_BIGDOT_A		; load colour code
+	JSR BM_PLOT		; plot point
+	INX			; repeat across the row (4px)
+	JSR BM_PLOT
+	INX
+	JSR BM_PLOT
+	INX
+	JSR BM_PLOT
+	INY			; increment row number
+	DEC BM_BIGDOT_HEIGHT	; decrement height counter
+	BNE BM_BIGDOT_ROW	; ... continue if not done
+
+	LDA BM_BIGDOT_A	; restore registers
+	LDX BM_BIGDOT_X
+	LDY BM_BIGDOT_Y
+
+	RTS
+
+; ==============================================================
+
+; print the null-terminated string immediately after the 
+; "JSR PRINT"
+
+; zeropage locations used in this routine
+define		PRINT_PTR	$20
+define		PRINT_PTR_H	$21
+
+PRINT:		pla
+		clc
+		adc #$01
+		sta PRINT_PTR
+		pla
+		sta PRINT_PTR_H
+
+		tya
+		pha
+
+		ldy #$00
+print_next:	lda (PRINT_PTR),y
+		beq print_done
+		
+		jsr CHROUT
+		iny
+		jmp print_next
+
+print_done:	tya
+		clc
+		adc PRINT_PTR
+		sta PRINT_PTR
+
+		lda PRINT_PTR_H
+		adc #$00
+		sta PRINT_PTR_H
+
+		pla
+		tay
+
+		lda PRINT_PTR_H
+		pha
+		lda PRINT_PTR
+		pha
+
+		rts
+PRINT:		PLA
+		CLC
+		ADC #$01
+		STA PRINT_PTR
+		PLA
+		STA PRINT_PTR_H
+
+		TYA
+		PHA
+
+		LDY #$00
+PRINT_NEXT:	LDA (PRINT_PTR),Y
+		BEQ PRINT_DONE
+		
+		JSR CHROUT
+		INY
+		JMP PRINT_NEXT
+
+PRINT_DONE:	TYA
+		CLC
+		ADC PRINT_PTR
+		STA PRINT_PTR
+
+		LDA PRINT_PTR_H
+		ADC #$00
+		STA PRINT_PTR_H
+
+		PLA
+		TAY
+
+		LDA PRINT_PTR_H
+		PHA
+		LDA PRINT_PTR
+		PHA
+
+		RTS
+
+; =======================================================
+
+; list of 256 5-letter words
+WORD_LIST:
+dcb "S","T","O","R","E"
+dcb "S","P","E","E","D"
+dcb "T","R","E","N","D"
+dcb "R","I","G","H","T"
+dcb "I","M","A","G","E"
+dcb "L","I","M","I","T"
+dcb "N","U","R","S","E"
+dcb "L","U","N","C","H"
+dcb "C","R","O","W","N"
+dcb "I","N","P","U","T"
+dcb "W","A","T","C","H"
+dcb "R","O","U","T","E"
+dcb "M","O","T","O","R"
+dcb "L","I","G","H","T"
+dcb "S","C","E","N","E"
+dcb "B","O","A","R","D"
+dcb "R","E","P","L","Y"
+dcb "R","A","N","G","E"
+dcb "M","E","T","A","L"
+dcb "D","R","I","V","E"
+dcb "A","B","U","S","E"
+dcb "P","E","T","E","R"
+dcb "F","I","E","L","D"
+dcb "L","A","U","R","A"
+dcb "F","R","A","N","K"
+dcb "S","H","I","R","T"
+dcb "D","E","A","T","H"
+dcb "S","T","Y","L","E"
+dcb "G","R","A","S","S"
+dcb "W","O","M","A","N"
+dcb "T","O","W","E","R"
+dcb "S","T","O","C","K"
+dcb "S","T","E","E","L"
+dcb "F","A","U","L","T"
+dcb "S","K","I","L","L"
+dcb "I","N","D","E","X"
+dcb "C","H","I","N","A"
+dcb "E","N","E","M","Y"
+dcb "P","E","A","C","E"
+dcb "P","A","P","E","R"
+dcb "T","R","A","C","K"
+dcb "N","O","V","E","L"
+dcb "S","M","I","T","H"
+dcb "M","O","N","T","H"
+dcb "P","I","E","C","E"
+dcb "W","O","R","L","D"
+dcb "P","O","I","N","T"
+dcb "T","R","A","D","E"
+dcb "N","O","R","T","H"
+dcb "F","L","O","O","R"
+dcb "C","R","I","M","E"
+dcb "I","S","S","U","E"
+dcb "T","O","T","A","L"
+dcb "V","O","I","C","E"
+dcb "S","T","A","F","F"
+dcb "C","O","V","E","R"
+dcb "S","H","I","F","T"
+dcb "S","H","E","E","T"
+dcb "P","H","O","N","E"
+dcb "M","A","R","C","H"
+dcb "F","R","A","M","E"
+dcb "P","A","R","T","Y"
+dcb "F","A","I","T","H"
+dcb "W","A","T","E","R"
+dcb "B","R","E","A","D"
+dcb "J","U","D","G","E"
+dcb "S","O","U","N","D"
+dcb "C","H","A","I","N"
+dcb "B","E","A","C","H"
+dcb "B","A","S","I","S"
+dcb "P","R","I","D","E"
+dcb "H","O","T","E","L"
+dcb "P","H","A","S","E"
+dcb "P","I","T","C","H"
+dcb "B","R","E","A","K"
+dcb "S","M","I","L","E"
+dcb "O","W","N","E","R"
+dcb "F","O","R","C","E"
+dcb "P","L","A","N","E"
+dcb "Q","U","E","E","N"
+dcb "S","H","E","E","P"
+dcb "A","D","U","L","T"
+dcb "C","H","E","S","T"
+dcb "F","R","U","I","T"
+dcb "S","T","E","A","M"
+dcb "L","E","W","I","S"
+dcb "D","R","I","N","K"
+dcb "P","A","N","E","L"
+dcb "R","A","D","I","O"
+dcb "T","A","S","T","E"
+dcb "S","P","I","T","E"
+dcb "J","O","N","E","S"
+dcb "B","R","A","I","N"
+dcb "S","T","A","R","T"
+dcb "E","N","T","R","Y"
+dcb "D","R","E","A","M"
+dcb "O","R","D","E","R"
+dcb "T","I","T","L","E"
+dcb "N","O","I","S","E"
+dcb "D","O","U","B","T"
+dcb "C","L","O","C","K"
+dcb "W","H","O","L","E"
+dcb "P","R","I","C","E"
+dcb "O","T","H","E","R"
+dcb "S","P","O","R","T"
+dcb "C","L","A","S","S"
+dcb "C","O","U","R","T"
+dcb "G","U","I","D","E"
+dcb "S","H","O","C","K"
+dcb "T","H","E","M","E"
+dcb "B","U","Y","E","R"
+dcb "S","L","E","E","P"
+dcb "V","I","D","E","O"
+dcb "G","R","A","N","T"
+dcb "D","A","N","C","E"
+dcb "M","O","U","T","H"
+dcb "R","O","U","N","D"
+dcb "L","E","V","E","L"
+dcb "R","I","V","E","R"
+dcb "M","A","J","O","R"
+dcb "M","U","S","I","C"
+dcb "S","Q","U","A","D"
+dcb "C","R","O","S","S"
+dcb "S","C","O","R","E"
+dcb "S","M","O","K","E"
+dcb "W","H","I","T","E"
+dcb "S","C","A","L","E"
+dcb "V","I","S","I","T"
+dcb "P","L","A","N","T"
+dcb "C","H","I","E","F"
+dcb "C","O","A","S","T"
+dcb "N","I","G","H","T"
+dcb "T","O","U","C","H"
+dcb "S","U","G","A","R"
+dcb "V","A","L","U","E"
+dcb "C","O","A","C","H"
+dcb "P","R","E","S","S"
+dcb "O","F","F","E","R"
+dcb "P","R","I","Z","E"
+dcb "E","A","R","T","H"
+dcb "S","T","U","D","Y"
+dcb "G","R","O","U","P"
+dcb "W","H","I","L","E"
+dcb "S","I","G","H","T"
+dcb "B","I","R","T","H"
+dcb "F","O","C","U","S"
+dcb "C","R","O","W","D"
+dcb "W","A","S","T","E"
+dcb "B","L","O","O","D"
+dcb "M","O","D","E","L"
+dcb "U","N","I","T","Y"
+dcb "S","T","A","T","E"
+dcb "T","H","I","N","G"
+dcb "B","L","O","C","K"
+dcb "T","R","I","A","L"
+dcb "A","G","E","N","T"
+dcb "S","P","A","C","E"
+dcb "H","O","R","S","E"
+dcb "C","Y","C","L","E"
+dcb "C","L","A","I","M"
+dcb "J","A","P","A","N"
+dcb "D","R","A","M","A"
+dcb "T","R","U","T","H"
+dcb "G","L","A","S","S"
+dcb "M","A","T","C","H"
+dcb "T","R","A","I","N"
+dcb "P","R","O","O","F"
+dcb "H","E","A","R","T"
+dcb "F","I","G","H","T"
+dcb "F","I","N","A","L"
+dcb "C","H","A","I","R"
+dcb "H","O","U","S","E"
+dcb "C","H","I","L","D"
+dcb "T","A","B","L","E"
+dcb "R","A","T","I","O"
+dcb "S","H","A","R","E"
+dcb "L","A","Y","E","R"
+dcb "U","N","I","O","N"
+dcb "T","R","U","S","T"
+dcb "S","I","M","O","N"
+dcb "P","O","W","E","R"
+dcb "S","T","A","G","E"
+dcb "D","R","E","S","S"
+dcb "P","L","A","C","E"
+dcb "G","R","E","E","N"
+dcb "C","A","U","S","E"
+dcb "A","P","P","L","E"
+dcb "A","W","A","R","D"
+dcb "S","T","U","F","F"
+dcb "A","N","G","E","R"
+dcb "P","L","A","T","E"
+dcb "S","O","U","T","H"
+dcb "U","N","C","L","E"
+dcb "H","E","N","R","Y"
+dcb "D","E","P","T","H"
+dcb "S","T","O","N","E"
+dcb "E","V","E","N","T"
+dcb "D","R","A","F","T"
+dcb "R","U","G","B","Y"
+dcb "E","R","R","O","R"
+dcb "P","I","L","O","T"
+dcb "M","O","N","E","Y"
+dcb "B","R","O","W","N"
+dcb "S","C","O","P","E"
+dcb "T","E","R","R","Y"
+dcb "C","R","E","A","M"
+dcb "K","N","I","F","E"
+dcb "F","R","O","N","T"
+dcb "S","H","A","P","E"
+dcb "P","O","U","N","D"
+dcb "Y","O","U","T","H"
+dcb "S","E","N","S","E"
