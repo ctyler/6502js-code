@@ -65,7 +65,7 @@ define	COLOR_LIGHT_GRAY	$0F
 ; zero-page locations
 define	GUESS_COUNT		$10	; number of guesses so far
 define	GREEN_COUNT		$11	; number of green dots
-define	CHAR_NUMBER		$12	; temp character number
+define	CHAR_NUMBER		$12	; temporary for character number
 define	WORD_POINTER		$13	; pointer to selected random word
 define	WORD_POINTER_HI		$14	
 
@@ -97,31 +97,30 @@ NEW_GAME:
 	ADC #$00
 	STA WORD_POINTER_HI
 
-	LDA WORD_POINTER	; add memory offset to word LIST
+	LDA WORD_POINTER	; add memory offset to word list
 	CLC
-	ADC #<WORD_LIST
+	ADC #<WORD_LIST		; ... this is the low byte of word list address
 	STA WORD_POINTER
 	LDA WORD_POINTER_HI
-	ADC #>WORD_LIST
+	ADC #>WORD_LIST		; ... this is the high byte of word list address
 	STA WORD_POINTER_HI
 
 	; copy the selected word to the ANSWER buffer
 	LDY #$00
-
 COPY_ANSWER_CHAR:
 	LDA (WORD_POINTER),Y
 	STA ANSWER,Y
-;	JSR CHROUT	; uncomment to show word (debugging)
+;	JSR CHROUT		; uncomment to show word (debugging)
 	INY
 	CPY #MAXIN
 	BNE COPY_ANSWER_CHAR
-;	LDA #$0D	; uncomment to show word (debugging)
-;	JSR CHROUT	; uncomment to show word (debugging)
+;	LDA #$0D		; uncomment to show word (debugging)
+;	JSR CHROUT		; uncomment to show word (debugging)
 
 	LDA #COLOUR_WHITE	; clear bitmap to white
 	JSR BM_CLEAR
 
-	LDA #$00	; initialize guess number to zero
+	LDA #$00		; initialize guess number to zero
 	STA GUESS_COUNT
 	
 ; ---------------------------------------------------------------
@@ -184,7 +183,7 @@ YELLOW_DOT:
 
 	LDX CHAR_NUMBER		; restore character number
 
-	LDA #COLOUR_YELLOW
+	LDA #COLOUR_YELLOW	; draw yellow dot
 	JMP DRAW_DOT
 
 GREEN_DOT:
@@ -193,7 +192,7 @@ GREEN_DOT:
 	LDA #$00		; zero out character from answer
 	STA ANSWER_BUFFER,X
 
-	LDA #COLOUR_GREEN
+	LDA #COLOUR_GREEN	; draw green dot
 
 DRAW_DOT:
 	JSR BM_BIGDOT
@@ -204,14 +203,14 @@ DRAW_DOT:
 
 	LDA GREEN_COUNT	; see if last guess was 5 green boxes
 	CMP #5
-	BEQ WIN
+	BEQ WIN		; ... if do print win message
 
 	INC GUESS_COUNT	; increment guess number
 	LDA #6		; max number of guesses
 	CMP GUESS_COUNT	; have we hit max?
 	BNE GET_GUESS	; if not, get another guess
 
-	JSR PRINT
+	JSR PRINT	; all guesses used, print lose message
 	dcb "Y","o","u",32,"l","o","s","e",".",$0D,$0D,$00
 	JMP PLAY_AGAIN
 
@@ -219,7 +218,7 @@ WIN:
 	JSR PRINT
 	dcb "Y","o","u",32,"w","i","n","!",$0D,$0D,$00
 
-PLAY_AGAIN:
+PLAY_AGAIN:		; print prompt and get keystroke before erasing bitmap
 	JSR PRINT
 	dcb "-","-","-","-","-","-","-",$0d
 	dcb "P","r","e","s","s",32,"E","N","T","E","R",32
@@ -234,19 +233,19 @@ WAIT_KEY:
 
 	JMP NEW_GAME
 
-; ======================================================	 	========
+; ==============================================================
 
 GETINPUT:
 	LDY #$00	; count of input characters
 
 CURSOR_INPUT:
-	LDA #CURSOR	; draw cursor block and backspace on top
+	LDA #CURSOR	; draw cursor block and move on top of it
 	JSR CHROUT
 	LDA #CURSOR_LEFT
 	JSR CHROUT
 
 GETCHAR:
-	JSR CHRIN
+	JSR CHRIN	; get a character
 	CMP #$00	; compare with null
 	BEQ GETCHAR	; ... get another char if null
 
@@ -254,14 +253,14 @@ GETCHAR:
 	BNE NOT_BACKSPACE	; ... skip ahead if not
 
 	CPY #$00	; do we have any characters?
-	BEQ GETCHAR	; ... get another char if not (no backspace)
+	BEQ GETCHAR	; ... get another char if not (can't backspace)
 
 	DEY		; reduce character count by one
-	LDA #SPACE	; draw space character and move 2 left
+	LDA #SPACE	; draw space character to erase
 	JSR CHROUT
 	LDA #CURSOR_LEFT
-	JSR CHROUT
-	JSR CHROUT	
+	JSR CHROUT	; move left to the erased character
+	JSR CHROUT	; move left to before the erased character
 	JMP CURSOR_INPUT
 
 NOT_BACKSPACE:
@@ -274,21 +273,21 @@ NOT_BACKSPACE:
 	JSR CHROUT
 	LDA #ENTER	; move to next line
 	JSR CHROUT
-	RTS		; return
+	RTS		; return -- data is in the buffer
 
 NOT_ENTER:
 	CMP #97		; letter 'a'
-	BCC CHECK_UPPER	; ... check uppercase 
-	CMP #123	; letter 'z'
-	BCS GETCHAR	; ... forget it
+	BCC CHECK_UPPER	; ... if code is lower, check for uppercase
+	CMP #123	; letter 'z' + 1
+	BCS GETCHAR	; ... if code is greater then forget it
 	CLC
-	SBC #31		; subtract 32 to convert to lowercase
+	SBC #31		; subtract 31 to convert to uppercase
 
 CHECK_UPPER:
 	CMP #65		; letter 'A'
 	BCC GETCHAR	; ... get another char if less
 	CMP #91		; letter 'Z' plus one
-	BCS GETCHAR	; ... get another char if >Z
+	BCS GETCHAR	; ... get another char if > Z
 	CPY #MAXIN	; do we have max # chars?
 	BCS GETCHAR	; ... ignore and get another char if so
 
@@ -297,8 +296,6 @@ CHECK_UPPER:
 	JSR CHROUT	; print the character
 
 	JMP CURSOR_INPUT
-
-
 
 ; ================================================
 
