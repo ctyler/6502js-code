@@ -264,7 +264,8 @@ clear_loop:	sta (SCREEN_PTR),y
 		rts
 
 ; ==================================================
-; SCROLL :: scroll screen up one line
+; R_CHRIN :: get one character from keyboard buffer
+;            if the user has typed one (else $00)
 
 R_CHRIN:	lda $ff
 		beq chrin_done
