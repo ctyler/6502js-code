@@ -1,0 +1,165 @@
+; Code to place one of several graphics at a
+; specified location on the bitmap display
+;
+; Copyright (C)2022 Seneca College
+; Chris Tyler 2022-11-02
+;
+; Licensed under the terms of the GPL v2+
+; See COPYING or LICENSE file for details
+
+; size of the graphic to be displayed
+define WIDTH 	4 ; width of graphic
+define HEIGHT 	4 ; height of graphic
+
+; zero-page memory locations 
+define SCREEN_POINTER_LO $10
+define SCREEN_POINTER_HI $11
+ 
+define DATA_POINTER_LO $40
+define DATA_POINTER_HI $41
+ 
+define TEMP_X	$20
+define TEMP_Y	$21
+define TEMP_A	$22
+
+; starting conditions
+; X = x position on the screen (left to right)
+; Y = y position on the screen (top to bottom)
+; A = graphic (0..2) - selects one of three graphics (see 'data' label)
+;
+; experiment: set the values in the following lines as you see fit
+
+	LDA #$01	; which graphic to show
+	LDX #$10	; x-position
+	LDY #$14	; y-position
+
+; -------------------
+
+	; save the values in the registers
+	STA TEMP_A
+	STY TEMP_Y
+	STX TEMP_X
+
+	; convert A into a pointer to the graphics data
+	; start with 0 in the hi byte of the pointer
+	LDA #$00
+	STA SCREEN_POINTER_HI
+
+	; multiply the Y value by 32 
+	; ... low byte is in A	
+	; ... high byte is in SCREEN_POINTER_HI
+	TYA
+	ASL						
+	ROL SCREEN_POINTER_HI
+	ASL						
+	ROL SCREEN_POINTER_HI
+	ASL						
+	ROL SCREEN_POINTER_HI
+	ASL						
+	ROL SCREEN_POINTER_HI
+	ASL						
+	ROL SCREEN_POINTER_HI
+
+	; add X to screen location
+	; ... low byte gets stored to SCREEN_POINTER_LO
+	; ... high byte still in SCREEN_POINTER_HI
+	CLC
+	ADC TEMP_X
+	STA SCREEN_POINTER_LO
+	LDA #$00
+	ADC SCREEN_POINTER_HI
+	STA SCREEN_POINTER_HI
+
+	; we've calculated the position on the screen
+	; now add $0200 to the pointer (since that's the
+	; start of the display memory)
+	CLC
+	LDA #$02
+	ADC SCREEN_POINTER_HI
+	STA SCREEN_POINTER_HI
+
+	; initialize variables
+
+ 	lda #$00	; number of rows we've drawn
+ 	sta $12		;   is stored in $12
+ 
+ 	ldx #$00	; index for data
+ 	ldy #$00	; index for screen column
+ 
+	; get the graphic to be drawn
+	; each graphic takes 16 bytes, so we take the
+	; graphic number, multiply by 16, and add that
+	; to the address of the label 'data'
+
+	; restore the graphic number to register A
+	lda TEMP_A
+
+	; do the four left-shifts to multiply by 16
+	asl 
+	asl 
+	asl 
+	asl 
+
+	; ... that gives us the low byte
+	sta DATA_POINTER_LO
+
+	; get the high byte from the 'data' label
+	lda #>data
+	sta DATA_POINTER_HI
+
+ draw:	
+	sty TEMP_Y	; save Y then move X to Y
+	txa
+	tay
+
+	lda (DATA_POINTER_LO),y	; get a graphic byte
+
+	ldy TEMP_Y	; restore Y register
+ 	sta (SCREEN_POINTER_LO),y	; put byte on screen
+
+ 	inx
+ 	iny
+ 	cpy #WIDTH
+ 	bne draw
+   
+ 	inc $12		; increment row counter
+ 
+ 	lda #HEIGHT	; are we done yet?
+ 	cmp $12
+ 	beq done	; ...exit if we are
+
+ 	lda $10		; load pointer
+ 	clc
+ 	adc #$20	; add 32 to drop one row
+ 	sta $10
+ 	lda $11         ; carry to high byte if needed
+ 	adc #$00
+ 	sta $11
+ 
+ 	ldy #$00
+ 	beq draw
+ 
+ done:	brk		; stop when finished
+ 
+
+*=$4000			; choose the location to store the graphics data
+
+ data:			; graphics to be displayed
+
+; graphic 0 (O shape)
+ dcb 00,03,03,00
+ dcb 07,00,00,07
+ dcb 07,00,00,07
+ dcb 00,03,03,00
+
+; graphic 1 (X shape)
+ dcb 01,00,00,07
+ dcb 00,01,07,00
+ dcb 00,07,01,00
+ dcb 07,00,00,01
+
+; graphic 2 (2 vertical lines)
+ dcb 15,00,00,15
+ dcb 15,00,00,15
+ dcb 15,00,00,15
+ dcb 15,00,00,15
