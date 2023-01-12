@@ -1,3 +1,15 @@
+; input5 :: get 5 uppercase letters from the user
+;
+; An example of a text input routine.
+;
+; Chris Tyler 2023-01-12
+; (C)2023 Seneca College of Applied Arts and Technology
+; Licensed under the terms of the GPL v2+ - See the 
+; LICENSE or COPYING file for details.
+;
+; Works with the 6502 emulator at http://6502.cdot.systems
+;
+
 ; ROM routines
 define		SCINIT		$ff81 ; initialize/clear screen
 define		CHRIN		$ffcf ; input character from keyboard
@@ -8,6 +20,12 @@ define		PLOT		$fff0 ; get/set cursor coordinates
 ; Memory locations
 define		INPUT		$2000 ; input buffer (up to 5 chars)
 
+;
+; This routine get a 5-character word from the user. Only letters
+; can be accumulated. The backspace key deletes the last character
+; if the character count is >0. The ENTER key accepts the input
+; if the character count is 5. Lower case letters are converted to
+; UPPERCASE.
 
 	JSR SCINIT
 

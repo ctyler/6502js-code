@@ -22,7 +22,8 @@ define		CURSOR_LEFT	$83   	; move cursor left
 define		BACKSPACE	$08   	; backspace character
 define		ENTER		$0d   	; ENTER character
 
-define	COLOUR_BLACK		$00	; graphics display colour codes
+; graphics display colour codes 
+define	COLOUR_BLACK		$00	
 define	COLOUR_WHITE		$01
 define	COLOUR_RED		$02
 define	COLOUR_CYAN		$03
@@ -42,7 +43,8 @@ define	COLOUR_LIGHT_BLUE	$0E
 define	COLOUR_LIGHT_GREY	$0F
 define	COLOUR_LIGHT_GRAY	$0F
 
-define	COLOR_BLACK		$00	; american spellings :-/
+; american spellings :-/ just in case
+define	COLOR_BLACK		$00	
 define	COLOR_WHITE		$01
 define	COLOR_RED		$02
 define	COLOR_CYAN		$03
@@ -70,8 +72,8 @@ define	WORD_POINTER		$13	; pointer to selected random word
 define	WORD_POINTER_HI		$14	
 
 ; other locations in memory
-define	GUESS_TEXT		$2000   ; 5 characters
-define	ANSWER_BUFFER		$2010	; copy of correct answer
+define	GUESS_TEXT		$2000   ; 5 character input
+define	ANSWER_BUFFER		$2010	; copy of correct answer to mark up
 define	ANSWER			$2020	; correct answer
 
 	JSR SCINIT	; initialize screen
@@ -91,7 +93,7 @@ NEW_GAME:
 	ASL		; x4
 	ROL WORD_POINTER_HI
 	CLC
-	ADC WORD_POINTER ; +1 = x5#$00
+	ADC WORD_POINTER ; +1 = x5
 	STA WORD_POINTER
 	LDA WORD_POINTER_HI
 	ADC #$00
@@ -156,11 +158,9 @@ NOT_GREEN:
 	STX GREEN_COUNT		; count of green boxes
 
 CHECK_CHAR:
-	LDA GUESS_TEXT,X	; get char X of guess_text
 	LDA ANSWER_BUFFER,X	; check char X of answer
 	CMP #$FF		; see if it's already marked as a match
 	BEQ GREEN_DOT		; ... match, draw green dot
-
 	
 	STX CHAR_NUMBER		; save the character number
 	LDA GUESS_TEXT,X	; get char X of guess_text
@@ -234,6 +234,15 @@ WAIT_KEY:
 	JMP NEW_GAME
 
 ; ==============================================================
+;
+; Get input from user
+; - Black solid cursor displayed
+; - Only letters can accumulate
+; - Letters are all converted to UPPERCASE
+; - Backspace removes last char if char count > 0
+; - No additional letters permitted if char count == 5
+; - Enter may be pressed only if char count == 5
+; - This routine returns when Enter is pressed
 
 GETINPUT:
 	LDY #$00	; count of input characters
@@ -429,48 +438,14 @@ BM_BIGDOT_ROW:
 ; ==============================================================
 
 ; print the null-terminated string immediately after the 
-; "JSR PRINT"
+; "JSR PRINT" - this is done by pulling the return address
+; off the stack, processing the string, and then placing 
+; the calculated return address on the stack
 
 ; zeropage locations used in this routine
 define		PRINT_PTR	$20
 define		PRINT_PTR_H	$21
 
-PRINT:		pla
-		clc
-		adc #$01
-		sta PRINT_PTR
-		pla
-		sta PRINT_PTR_H
-
-		tya
-		pha
-
-		ldy #$00
-print_next:	lda (PRINT_PTR),y
-		beq print_done
-		
-		jsr CHROUT
-		iny
-		jmp print_next
-
-print_done:	tya
-		clc
-		adc PRINT_PTR
-		sta PRINT_PTR
-
-		lda PRINT_PTR_H
-		adc #$00
-		sta PRINT_PTR_H
-
-		pla
-		tay
-
-		lda PRINT_PTR_H
-		pha
-		lda PRINT_PTR
-		pha
-
-		rts
 PRINT:		PLA
 		CLC
 		ADC #$01
