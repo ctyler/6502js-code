@@ -1,0 +1,113 @@
+; multiply_8x8bit.6502
+;
+; Example of 8-bit x 8-bit multiply with
+; 16-bit result on a 6502
+; 
+; This code uses shift-and-add
+;
+; Chris Tyler 2025-01-23 for the SPO600 course
+;
+; Copyright (C)2025 Seneca Polytechnic
+; Licensed under the terms of the GPLv2+
+; See the file LICENSE for details
+
+; ######### MACRO DEFINITIONS
+; === ZERO-PAGE MEMORY LOCATIONS
+
+; INPUT PARAMETERS AND RESULT
+define M1       $10   ; MULTIPLICAND 1
+
+define M2       $11   ; MULTIPLICAND 2
+
+define RESULT   $12   ; RESULT
+define RESULT_L $12
+define RESULT_H $13
+
+; TEMPORARY COPIES OF M1, M2
+define T1       $20  ; 8 BIT VALUE
+
+define T2       $21  ; 16 BIT (FOR SHIFTING)
+define T2_L     $21
+define T2_H     $22
+
+; ######### TEST CODE
+
+; NOTE: THE NEXT TWO OPERANDS ARE IN DECIMAL!
+;       THIS IS DUE TO THE LACK OF $
+
+  LDA #7      ; FIRST MULTIPLICAND
+  STA M1
+
+  LDA #9       ; SECOND MULTIPLICAND
+  STA M2
+
+  JSR MULTIPLY ; MULTIPLY THE VALUES
+
+  BRK          ; SEE 16 BIT RESULT AT 'RESULT'
+
+; ######### MULTIPLY SUBROUTINE
+; MULTIPLY THE CONTENTS OF M1 BY THE CONTENTS
+; OF M2 AND STORE THE RESULT IN 'RESULT'
+; 
+; Operation:
+; 0. Multiplicand M1 is copied to temporary
+;    variable T1. Multiplicand M2 is copied to
+;    the 16-bit temporary variable T2. The
+;    RESULT is zeroed out.
+; 1. If either multiplicand is zero, the 
+;    product is zero, so the routine returns
+;    immediately with RESULT=0.
+; 2. T1 is shifted right. If the bit shifted
+;    out (formerly bit 0) is a '1', then the 
+;    value of T2 is added to the RESULT.
+; 4. If T1 is zero after the shift, the
+;    multiplication is complete and the routine
+;    returns.
+; 5. T2 is rotated left (multiplied by 2).
+; 6. Processing continues at step 2.
+
+MULTIPLY:
+  LDA #$00      ; ZERO OUT THE RESULT AND Tn_H
+  STA RESULT_L
+  STA RESULT_H
+  STA T2_H
+
+  LDA M1         ; COPY M1 TO T1
+  BEQ MULT_DONE  ; RESULT=0 IF M1=0
+  STA T1
+
+  LDA M2         ; COPY M2 TO T2
+  BEQ MULT_DONE  ; RESULT=0 IF M2=0
+  STA T2_L
+
+  JMP MULT_FIRST
+
+MULT_NEXT:  
+  ASL T2_L       ; SHIFT T2 LEFT
+  ROL T2_H
+
+MULT_FIRST:
+  LSR T1         ; SHIFT T1 RIGHT
+  BEQ MULT_LAST  ; DO LAST BIT IF T1=0
+  BCC MULT_NEXT  ; IF BIT0 WAS 0, DO NEXT
+
+  LDA T2_L       ; IF BIT0 WAS 1:
+  CLC            ; T2 + RESULT-> RESULT
+  ADC RESULT_L
+  STA RESULT_L
+  LDA T2_H
+  ADC RESULT_H
+  STA RESULT_H
+  JMP MULT_NEXT
+
+MULT_LAST:       ; CODE IS REDUNDANT TO THE
+  LDA T2_L       ; PRECEEDING BLOCK, BUT 
+  CLC            ; WE'VE AVOIDED A SECOND
+  ADC RESULT_L   ; COMPARISON OF T1 WITH #0
+  STA RESULT_L   ; THEREBY SAVING 6-7 CYCLES
+  LDA T2_H       ; PER LOOP ITERATION OR 
+  ADC RESULT_H   ; 6-56 CYCLES TOTAL, AT A
+  STA RESULT_H   ; COST OF 13 ADDITIONAL BYTES
+
+MULT_DONE:
+  RTS
